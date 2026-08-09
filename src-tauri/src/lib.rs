@@ -89,10 +89,13 @@ fn resolve_script(app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn spawn_powershell(script: &Path, args: &[String]) -> Result<Child, String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     Command::new("powershell.exe")
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(script)
         .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
