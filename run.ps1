@@ -4,7 +4,9 @@
 #
 #   irm https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 | iex
 #
-# Downloads the latest release executable from GitHub and launches it.
+# Downloads the latest release from GitHub.
+#   - Portable build (zip): extracted to %TEMP% and launched directly (no install).
+#   - Falls back to the setup.exe installer if no portable build exists.
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -54,18 +56,60 @@ function Write-Status {
 
 # --- Release handling ---------------------------------------------------------
 
-function Get-ReleaseUrl {
+function Get-Release {
     param([string]$apiUrl)
     $release = Invoke-RestMethod -Uri $apiUrl -Headers @{ 'User-Agent' = 'Win-Optimizer-Pro' }
     if (-not $release) { throw 'GitHub API returned an empty release response.' }
+    return $release
+}
 
-    $asset = $release.assets | Where-Object { $_.name -match 'setup\.exe$' } | Select-Object -First 1
+function Invoke-LaunchPortable {
+    param($asset)
+    $zip = Join-Path $env:TEMP 'WinOptimizerPro-portable.zip'
+    $runDir = Join-Path $env:TEMP 'WinOptimizerPro'
+
+    Write-Status 'Portable build found - no installation required.'
+    Write-Status "Downloading: $($asset.name)"
+    Remove-Item $zip -Force -ErrorAction SilentlyContinue
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+
+    if (-not (Test-Path $zip) -or (Get-Item $zip).Length -lt 64KB) {
+        throw 'Portable download looks invalid (missing or too small).'
+    }
+
+    Remove-Item $runDir -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive -Path $zip -DestinationPath $runDir
+
+    $exe = Join-Path $runDir 'pc-optimizer.exe'
+    if (-not (Test-Path $exe)) {
+        throw 'Portable archive did not contain pc-optimizer.exe.'
+    }
+
+    Write-Status "Extracted to $runDir"
+    Write-Status 'Launching Win-Optimizer-Pro...'
+    Start-Process -FilePath $exe -WorkingDirectory $runDir
+}
+
+function Invoke-LaunchInstaller {
+    param($assets)
+    $asset = $assets | Where-Object { $_.name -match 'setup\.exe$' } | Select-Object -First 1
     if (-not $asset) {
-        $asset = $release.assets | Where-Object { $_.name -match '\.exe$' } | Select-Object -First 1
+        $asset = $assets | Where-Object { $_.name -match '\.exe$' } | Select-Object -First 1
     }
     if (-not $asset) { throw 'Release found but no executable (.exe) asset is attached.' }
 
-    return $asset.browser_download_url
+    Write-Status "Downloading: $($asset.name)"
+    $outFile = Join-Path $env:TEMP 'WinOptimizerPro.exe'
+    Remove-Item $outFile -Force -ErrorAction SilentlyContinue
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $outFile -UseBasicParsing
+
+    if (-not (Test-Path $outFile) -or (Get-Item $outFile).Length -lt 64KB) {
+        throw 'Downloaded file looks invalid (missing or too small).'
+    }
+
+    Write-Status "Saved to $outFile"
+    Write-Status 'Launching installer...'
+    Start-Process -FilePath $outFile
 }
 
 function Main {
@@ -75,41 +119,22 @@ function Main {
 
     $apiUrl = 'https://api.github.com/repos/karan5028ji/Win-Optimizer-Pro/releases/latest'
     try {
-        $downloadUrl = Get-ReleaseUrl -apiUrl $apiUrl
+        $release = Get-Release -apiUrl $apiUrl
+
+        $portable = $release.assets | Where-Object { $_.name -match 'portable.*\.zip$' } | Select-Object -First 1
+        if ($portable) {
+            Invoke-LaunchPortable -asset $portable
+        }
+        else {
+            Invoke-LaunchInstaller -assets $release.assets
+        }
     }
     catch {
         Write-Host ''
-        Write-Host "[!] Could not fetch the latest release." -ForegroundColor Red
-        Write-Host "    $($_.Exception.Message)" -ForegroundColor DarkYellow
+        Write-Host "[!] $($_.Exception.Message)" -ForegroundColor Red
         Write-Host '    Check your internet connection, or that a release exists on GitHub.' -ForegroundColor DarkGray
         return
     }
-
-    Write-Status "Found release asset, downloading: $downloadUrl"
-
-    $outFile = Join-Path $env:TEMP 'WinOptimizerPro.exe'
-    Remove-Item $outFile -Force -ErrorAction SilentlyContinue
-
-    try {
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $outFile -UseBasicParsing
-    }
-    catch {
-        Write-Host ''
-        Write-Host "[!] Download failed: $($_.Exception.Message)" -ForegroundColor Red
-        Remove-Item $outFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    if (-not (Test-Path $outFile) -or (Get-Item $outFile).Length -lt 64KB) {
-        Write-Host ''
-        Write-Host '[!] Downloaded file looks invalid (missing or too small).' -ForegroundColor Red
-        Remove-Item $outFile -Force -ErrorAction SilentlyContinue
-        return
-    }
-
-    Write-Status "Saved to $outFile"
-    Write-Status 'Launching Win-Optimizer-Pro...'
-    Start-Process -FilePath $outFile
 }
 
 Main
