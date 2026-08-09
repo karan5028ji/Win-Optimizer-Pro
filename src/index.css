@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  @apply bg-zinc-950 text-zinc-200 antialiased;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 8px;
+  border: 2px solid #09090b;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-panel-border bg-panel transition-all duration-200 ease-smooth;
+  }
+  .card:hover {
+    @apply border-zinc-700;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-accent {
+    @apply btn bg-accent-600 text-white hover:bg-accent-500 hover:shadow-accent-glow active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn border border-panel-border bg-transparent text-zinc-300 hover:border-accent-500 hover:text-accent-300;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-500 active:scale-[0.98];
+  }
+  .nav-item {
+    @apply flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-all duration-150 ease-smooth hover:bg-zinc-900 hover:text-zinc-100;
+  }
+  .nav-item-active {
+    @apply bg-accent-900/40 text-accent-300 shadow-accent-glow;
+  }
+  .section-title {
+    @apply text-lg font-semibold tracking-tight text-zinc-100;
+  }
+}
