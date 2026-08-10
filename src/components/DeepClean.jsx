@@ -14,6 +14,8 @@ const CLEAN_ITEMS = [
   { id: "INet", label: "INetCache", desc: "Legacy Internet Explorer", icon: Globe, args: ["-INet"] },
 ];
 
+const QUICK_CLEAN = ["UserTemp", "WindowsTemp", "FlushDNS"];
+
 export default function DeepClean() {
   const { running, run } = useApp();
   const [selected, setSelected] = useState(() =>
@@ -32,21 +34,27 @@ export default function DeepClean() {
     if (args.length) run(args);
   };
 
+  const applyQuickClean = () =>
+    setSelected(Object.fromEntries(CLEAN_ITEMS.map((i) => [i.id, QUICK_CLEAN.includes(i.id)])));
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="section-title">Deep Clean</h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Pick exactly what to purge. Locked files are skipped automatically.
           </p>
         </div>
         <div className="flex gap-2">
+          <button onClick={applyQuickClean} className="btn-secondary" title="Select %temp%, Windows Temp and DNS flush">
+            <Brush size={15} strokeWidth={2} /> Quick Clean
+          </button>
           <button onClick={setAll} className="btn-ghost">
             {allOn ? "Clear All" : "Select All"}
           </button>
-          <button onClick={cleanSelected} disabled={running || count === 0} className="btn-accent">
-            <Trash2 size={15} /> Clean Selected ({count})
+          <button onClick={cleanSelected} disabled={running || count === 0} className="btn-primary">
+            <Trash2 size={15} strokeWidth={2} /> Clean Selected ({count})
           </button>
         </div>
       </div>
@@ -59,23 +67,23 @@ export default function DeepClean() {
               key={item.id}
               className={`card group p-4 transition-all duration-200 ${
                 selected[item.id]
-                  ? "border-accent-700 shadow-accent-glow"
-                  : "hover:border-zinc-700"
+                  ? "border-teal-600 bg-teal-600/5 dark:bg-teal-600/10"
+                  : "hover:border-teal-600"
               }`}
             >
               <div className="mb-2 flex items-center gap-2">
                 <span
                   className={`rounded-md p-1.5 transition-colors duration-200 ${
                     selected[item.id]
-                      ? "bg-accent-600/20 text-accent-400"
-                      : "bg-zinc-800 text-zinc-500 group-hover:text-accent-400"
+                      ? "bg-teal-600 text-white"
+                      : "bg-slate-100 text-slate-500 group-hover:text-teal-600 dark:bg-slate-700 dark:text-slate-400 dark:group-hover:text-teal-400"
                   }`}
                 >
-                  <Icon size={16} />
+                  <Icon size={16} strokeWidth={2} />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-zinc-200">{item.label}</p>
-                  <p className="truncate text-xs text-zinc-500">{item.desc}</p>
+                  <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{item.label}</p>
+                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">{item.desc}</p>
                 </div>
               </div>
               <Toggle

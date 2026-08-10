@@ -264,6 +264,41 @@ function Get-BloatCategories {
     }
 }
 
+# Single-pass helpers: enumerate Appx packages ONCE, filter in memory. The old
+# code re-ran Get-AppxPackage / Get-AppxProvisionedPackage once per pattern,
+# which made the list + remove paths 20-40x slower than they needed to be.
+
+function Get-AppxSnapshot {
+    <#
+        .SYNOPSIS
+        One Get-AppxPackage call (AllUsers when elevated), deduped, protected
+        packages already excluded. Used by the list and remove paths.
+    #>
+    $admin = Test-IsAdmin
+    if ($admin) {
+        $pkgs = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue)
+    }
+    else {
+        $pkgs = @(Get-AppxPackage -ErrorAction SilentlyContinue)
+    }
+    $seen = @{}
+    foreach ($p in $pkgs) {
+        if ($p.Name -in $Script:ProtectedPackages) { continue }
+        if ($seen.ContainsKey($p.PackageFullName)) { continue }
+        $seen[$p.PackageFullName] = $p
+    }
+    return $seen.Values
+}
+
+function Get-ProvisionedSnapshot {
+    <#
+        .SYNOPSIS
+        One Get-AppxProvisionedPackage -Online call, protected packages excluded.
+    #>
+    @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -notin $Script:ProtectedPackages })
+}
+
 function Remove-Bloatware {
     <#
         .SYNOPSIS
@@ -278,20 +313,22 @@ function Remove-Bloatware {
         [switch]$DryRun
     )
 
-    $targets = [System.Collections.Generic.List[string]]::new()
+    $targets = @()
     if ($All) {
-        $Script:BloatCategories.Values | ForEach-Object { $targets.Add($_) }
+        foreach ($pat in @($Script:BloatCategories.Values)) {
+            foreach ($p in @($pat)) { $targets += $p }
+        }
     }
     foreach ($c in $Category) {
         if ($Script:BloatCategories.Contains($c)) {
-            $Script:BloatCategories[$c] | ForEach-Object { $targets.Add($_) }
+            foreach ($p in @($Script:BloatCategories[$c])) { $targets += $p }
         }
         else {
             Write-Log "[warn] unknown category: $c (see Get-BloatCategories)"
         }
     }
-    foreach ($p in $Package) { $targets.Add($p) }
-    $targets = $targets | Sort-Object -Unique
+    foreach ($p in $Package) { $targets += $p }
+    $targets = @($targets | Sort-Object -Unique)
 
     if ($targets.Count -eq 0) {
         Write-Log "[debloat] nothing to do. Use -All, -Category or -Package."
@@ -306,51 +343,43 @@ function Remove-Bloatware {
         return
     }
 
+    $admin = Test-IsAdmin
+    $snap = @(Get-AppxSnapshot)
+    $prov = @()
+    if ($admin) { $prov = @(Get-ProvisionedSnapshot) }
+
     $matched = 0
+    $handled = @{}
     foreach ($pattern in $targets) {
         if ($pattern -in $Script:ProtectedPackages) {
             Write-Log "[protect] skipping protected package pattern: $pattern"
             continue
         }
-        try {
-            $installed = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -like $pattern -and $_.Name -notin $Script:ProtectedPackages })
-        }
-        catch {
-            $installed = @()
-        }
-        if ($installed.Count -eq 0 -and $DryRun -and -not (Test-IsAdmin)) {
-            $installed = @(Get-AppxPackage -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -like $pattern -and $_.Name -notin $Script:ProtectedPackages })
-        }
-        foreach ($pkg in $installed) {
-            $matched++
-            if ($DryRun) {
-                Write-Log "[dry-run] would remove: $($pkg.Name)  v$($pkg.Version)"
-            }
-            else {
-                Write-Log "[remove] $($pkg.Name)  v$($pkg.Version)"
-                Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+        foreach ($pkg in $snap) {
+            if ($pkg.Name -like $pattern -and -not $handled.ContainsKey($pkg.PackageFullName)) {
+                $handled[$pkg.PackageFullName] = $true
+                $matched++
+                if ($DryRun) {
+                    Write-Log "[dry-run] would remove: $($pkg.Name)  v$($pkg.Version)"
+                }
+                else {
+                    Write-Log "[remove] $($pkg.Name)  v$($pkg.Version)"
+                    Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+                }
             }
         }
-
-        if (-not (Test-IsAdmin)) { continue }
-
-        try {
-            $provisioned = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-                Where-Object { $_.DisplayName -like $pattern -and $_.DisplayName -notin $Script:ProtectedPackages })
-        }
-        catch {
-            $provisioned = @()
-        }
-        foreach ($pkg in $provisioned) {
-            $matched++
-            if ($DryRun) {
-                Write-Log "[dry-run] would remove provisioned: $($pkg.DisplayName)"
-            }
-            else {
-                Write-Log "[remove provisioned] $($pkg.DisplayName)"
-                Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue
+        if (-not $admin) { continue }
+        foreach ($p in $prov) {
+            if ($p.DisplayName -like $pattern -and -not $handled.ContainsKey($p.PackageName)) {
+                $handled[$p.PackageName] = $true
+                $matched++
+                if ($DryRun) {
+                    Write-Log "[dry-run] would remove provisioned: $($p.DisplayName)"
+                }
+                else {
+                    Write-Log "[remove provisioned] $($p.DisplayName)"
+                    Remove-AppxProvisionedPackage -Online -PackageName $p.PackageName -ErrorAction SilentlyContinue
+                }
             }
         }
     }
@@ -361,25 +390,19 @@ function Get-BloatableApps {
     <#
         .SYNOPSIS
         Returns installed Appx packages that match any bloatware category,
-        tagged with their category. Used by the GUI debloater grid.
+        tagged with their category. Single Appx enumeration, filtered in memory.
     #>
+    $all = @(Get-AppxSnapshot)
     $rows = @()
-    $admin = Test-IsAdmin
     foreach ($cat in $Script:BloatCategories.Keys) {
         foreach ($pattern in $Script:BloatCategories[$cat]) {
-            if ($admin) {
-                $pkgs = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -like $pattern -and $_.Name -notin $Script:ProtectedPackages })
-            }
-            else {
-                $pkgs = @(Get-AppxPackage -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -like $pattern -and $_.Name -notin $Script:ProtectedPackages })
-            }
-            foreach ($pkg in $pkgs) {
-                $rows += [pscustomobject]@{
-                    Category    = $cat
-                    Name        = $pkg.Name
-                    DisplayName = $pkg.DisplayName
+            foreach ($pkg in $all) {
+                if ($pkg.Name -like $pattern) {
+                    $rows += [pscustomobject]@{
+                        Category    = $cat
+                        Name        = $pkg.Name
+                        DisplayName = $pkg.DisplayName
+                    }
                 }
             }
         }
@@ -420,6 +443,19 @@ $Script:TweakOptions = [ordered]@{
     'searchweb'      = 'Disable Bing web results in Start search'
 }
 
+# Registry location + expected value that proves a tweak is currently applied.
+# Key  Name  Expected
+$Script:TweakStateChecks = @{
+    'telemetry'      = @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection', 'AllowTelemetry', 0)
+    'backgroundapps' = @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy', 'LetAppsRunInBackground', 2)
+    'hibernation'    = @('HKLM:\SYSTEM\CurrentControlSet\Control\Power', 'HibernateEnabled', 0)
+    'faststartup'    = @('HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power', 'HiberbootEnabled', 0)
+    'gamebar'        = @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR', 'AllowGameDVR', 0)
+    'cortana'        = @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search', 'AllowCortana', 0)
+    'tips'           = @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent', 'DisableSoftLanding', 1)
+    'searchweb'      = @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search', 'ConnectedSearchUseWeb', 0)
+}
+
 function Set-RegistryDword {
     param(
         [Parameter(Mandatory = $true)][string]$Key,
@@ -434,6 +470,24 @@ function Get-TweakList {
     foreach ($key in $Script:TweakOptions.Keys) {
         Write-Log "  [$key] -> $($Script:TweakOptions[$key])"
     }
+}
+
+function Get-TweakState {
+    <#
+        .SYNOPSIS
+        Reports whether each tweak is already applied, as STATE|id|true|false
+        lines. Read-only, works without elevation.
+    #>
+    foreach ($key in $Script:TweakOptions.Keys) {
+        $applied = $false
+        $check = $Script:TweakStateChecks[$key]
+        if ($check -and (Test-Path -LiteralPath $check[0])) {
+            $val = (Get-ItemProperty -LiteralPath $check[0] -Name $check[1] -ErrorAction SilentlyContinue).$($check[1])
+            if ($null -ne $val -and [int]$val -eq [int]$check[2]) { $applied = $true }
+        }
+        Write-Log "STATE|$key|$applied"
+    }
+    Write-Log "=== STATE COMPLETE ==="
 }
 
 function Apply-SystemTweaks {
@@ -536,6 +590,68 @@ function Apply-SystemTweaks {
         }
     }
     Write-Log "[tweaks] done."
+}
+
+# ---------------------------------------------------------------------------
+# Restore point (safety net before destructive actions)
+# ---------------------------------------------------------------------------
+function New-RestorePoint {
+    <#
+        .SYNOPSIS
+        Enables System Restore on the system drive and creates a checkpoint.
+        Failure to create one is logged as a warning, never fatal.
+    #>
+    param([switch]$DryRun)
+    if ($DryRun) {
+        Write-Log "[restorepoint] (dry-run) would create a System Restore point"
+        return
+    }
+    try {
+        Write-Log "[restorepoint] enabling System Restore on $env:SystemDrive ..."
+        Enable-ComputerRestore -Drive "$env:SystemDrive" -ErrorAction Stop
+        Write-Log "[restorepoint] creating restore point (may take a moment) ..."
+        Checkpoint-Computer -Description 'PC Optimizer' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
+        Write-Log "[restorepoint] restore point created."
+    }
+    catch {
+        Write-Log "[restorepoint] warning: could not create restore point ($($_.Exception.Message))"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Fast health scan (dashboard "Quick Scan")
+# ---------------------------------------------------------------------------
+function Invoke-QuickScan {
+    <#
+        .SYNOPSIS
+        Lightweight, read-only health snapshot. Uses single-pass enumerations so
+        it finishes in a few seconds instead of running a full debloat preview.
+    #>
+    param([switch]$DryRun)
+    Write-Log "[scan] collecting quick health snapshot ..."
+
+    $userTemp = @(Get-ChildItem -LiteralPath $env:TEMP -Force -ErrorAction SilentlyContinue).Count
+    $winTemp = @(Get-ChildItem -LiteralPath "$env:SystemRoot\Temp" -Force -ErrorAction SilentlyContinue).Count
+    $dns = @(ipconfig /displaydns | Select-String 'Record Name').Count
+
+    $bloat = @(Get-BloatableApps)
+    $pending = 0
+    foreach ($t in $Script:TweakOptions.Keys) {
+        $applied = $false
+        $check = $Script:TweakStateChecks[$t]
+        if ($check -and (Test-Path -LiteralPath $check[0])) {
+            $val = (Get-ItemProperty -LiteralPath $check[0] -Name $check[1] -ErrorAction SilentlyContinue).$($check[1])
+            if ($null -ne $val -and [int]$val -eq [int]$check[2]) { $applied = $true }
+        }
+        if (-not $applied) { $pending++ }
+    }
+
+    Write-Log "SCAN|temp_items|$userTemp"
+    Write-Log "SCAN|windows_temp_items|$winTemp"
+    Write-Log "SCAN|dns_entries|$dns"
+    Write-Log "SCAN|bloat_apps|$($bloat.Count)"
+    Write-Log "SCAN|tweaks_pending|$pending"
+    Write-Log "=== SCAN COMPLETE ==="
 }
 
 # ---------------------------------------------------------------------------

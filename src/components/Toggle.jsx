@@ -17,19 +17,21 @@ export default function Toggle({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`group flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 ${
-        disabled ? "cursor-not-allowed opacity-40" : "hover:bg-zinc-900"
+      className={`group flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left transition-all duration-200 ${
+        disabled
+          ? "cursor-not-allowed opacity-40"
+          : "hover:-translate-y-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/50"
       }`}
     >
       <span
-        className={`relative ${dims} mt-0.5 shrink-0 rounded-full border transition-all duration-200 ease-smooth ${
+        className={`relative ${dims} mt-0.5 shrink-0 rounded-full border transition-colors duration-200 ${
           checked
-            ? "border-accent-500 bg-accent-600 shadow-accent-glow"
-            : "border-panel-border bg-zinc-800"
+            ? "border-teal-600 bg-teal-600"
+            : "border-slate-300 bg-slate-200 dark:border-slate-600 dark:bg-slate-700"
         }`}
       >
         <span
-          className={`absolute left-0.5 top-1/2 -translate-y-1/2 ${knob} rounded-full bg-white transition-transform duration-200 ease-smooth ${
+          className={`absolute left-0.5 top-1/2 -translate-y-1/2 ${knob} rounded-full bg-white shadow-sm transition-transform duration-200 ease-smooth ${
             checked ? shift : "translate-x-0"
           }`}
         />
@@ -37,12 +39,14 @@ export default function Toggle({
       {(label || description) && (
         <span className="min-w-0">
           {label && (
-            <span className="block text-sm font-medium text-zinc-200 group-hover:text-zinc-100">
+            <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">
               {label}
             </span>
           )}
           {description && (
-            <span className="block text-xs text-zinc-500">{description}</span>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">
+              {description}
+            </span>
           )}
         </span>
       )}

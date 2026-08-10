@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Eraser, Square, Terminal } from "lucide-react";
 import { useApp } from "../lib/app-context";
 
 export default function Console({ running, onCancel }) {
-  const { logs, clearLogs } = useApp();
+  const { logs, statusLine, clearLogs } = useApp();
   const [expanded, setExpanded] = useState(true);
   const [height, setHeight] = useState(48);
   const bodyRef = useRef(null);
@@ -15,37 +15,40 @@ export default function Console({ running, onCancel }) {
   }, [logs]);
 
   return (
-    <section className="shrink-0 border-t border-panel-border bg-zinc-950">
+    <section className="shrink-0 border-t border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <div className="flex h-9 items-center gap-2 px-4">
         <button
           onClick={() => {
             setExpanded(!expanded);
             setHeight(expanded ? 0 : 48);
           }}
-          className="flex items-center gap-2 rounded px-2 py-1 text-xs font-semibold text-zinc-400 transition-colors hover:text-zinc-100"
+          className="flex items-center gap-2 rounded px-2 py-1 text-xs font-semibold text-slate-500 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
-          <Terminal size={14} className="text-accent-500" />
+          <Terminal size={14} strokeWidth={2} className="text-teal-600 dark:text-teal-400" />
           Console
           {expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
 
-        <div className="mx-3 h-4 w-px bg-panel-border" />
+        <div className="mx-3 h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
-        <div className="flex flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {running ? (
             <>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-900">
-                <div className="h-full w-full origin-left animate-pulse rounded-full bg-gradient-to-r from-accent-700 via-accent-500 to-accent-400" />
+              <div className="h-1 w-40 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                <div className="h-full w-full origin-left animate-pulse rounded-full bg-teal-600" />
               </div>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-teal-700 dark:text-teal-400">
+                {statusLine || "Running…"}
+              </span>
               <button
                 onClick={onCancel}
-                className="flex items-center gap-1.5 rounded-md border border-red-600/40 bg-red-600/10 px-2 py-1 text-xs font-semibold text-red-400 transition-colors hover:bg-red-600/20"
+                className="btn-danger !px-2.5 !py-1 text-xs"
               >
                 <Square size={11} /> Stop
               </button>
             </>
           ) : (
-            <span className="text-xs text-zinc-600">
+            <span className="text-xs text-slate-400 dark:text-slate-500">
               {logs.length > 0 ? "Finished" : "Ready"}
             </span>
           )}
@@ -53,7 +56,7 @@ export default function Console({ running, onCancel }) {
 
         <button
           onClick={clearLogs}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-200"
+          className="btn-ghost !px-2 !py-1 text-xs"
           title="Clear"
         >
           <Eraser size={13} />
@@ -66,7 +69,7 @@ export default function Console({ running, onCancel }) {
       >
         <pre
           ref={bodyRef}
-          className="h-full overflow-y-auto border-t border-panel-border bg-[#0a0a0c] px-4 py-3 font-mono text-[12px] leading-relaxed text-zinc-400"
+          className="h-full overflow-y-auto border-t border-slate-200 bg-slate-50 px-4 py-3 font-mono text-[12px] leading-relaxed text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
         >
           {logs.length === 0 ? "Waiting for output…\n" : logs.join("")}
         </pre>

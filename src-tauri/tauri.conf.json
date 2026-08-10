@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PC Optimizer",
-  "version": "0.1.0",
-  "identifier": "com.pcoptimizer.desktop",
+  "productName": "Win-Optimizer-Pro",
+  "version": "2.1.0",
+  "identifier": "com.winoptimizerpro.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,13 +13,13 @@
     "windows": [
       {
         "label": "main",
-        "title": "PC Optimizer",
+        "title": "Win-Optimizer-Pro",
         "width": 1320,
         "height": 860,
         "minWidth": 1080,
         "minHeight": 680,
         "resizable": true,
-        "backgroundColor": "#09090b"
+        "backgroundColor": "#0f172a"
       }
     ],
     "security": {
@@ -36,7 +36,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["../optimizer.ps1", "../engine.ps1"],
+    "resources": ["../optimizer.ps1", "../engine.ps1", "../winutil.ps1"],
     "windows": {
       "nsis": {
         "installMode": "perMachine"

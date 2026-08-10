@@ -1,8 +1,14 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+}
+
+.dark {
   color-scheme: dark;
 }
 
@@ -13,8 +19,9 @@ body,
 }
 
 body {
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  @apply bg-zinc-950 text-zinc-200 antialiased;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply dark:bg-slate-900 dark:text-slate-100;
   overflow: hidden;
 }
 
@@ -26,40 +33,77 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 8px;
-  border: 2px solid #09090b;
+  @apply rounded-full bg-slate-300 dark:bg-slate-600;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  @apply bg-slate-400 dark:bg-slate-500;
 }
 
 @layer components {
+  /* ---------- Cards ---------- */
   .card {
-    @apply rounded-xl border border-panel-border bg-panel transition-all duration-200 ease-smooth;
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    @apply dark:border-slate-700 dark:bg-slate-800 dark:shadow-none;
+    transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .card:hover {
-    @apply border-zinc-700;
-  }
+
+  /* ---------- Buttons ---------- */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40;
   }
-  .btn-accent {
-    @apply btn bg-accent-600 text-white hover:bg-accent-500 hover:shadow-accent-glow active:scale-[0.98];
+  .btn-primary {
+    @apply btn bg-teal-600 text-white hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-md active:translate-y-0 active:shadow-none;
   }
-  .btn-ghost {
-    @apply btn border border-panel-border bg-transparent text-zinc-300 hover:border-accent-500 hover:text-accent-300;
+  .btn-secondary {
+    @apply btn border border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-100 hover:shadow-md dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700;
   }
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-500 active:scale-[0.98];
+    @apply btn bg-red-600 text-white hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-md active:translate-y-0;
   }
+  .btn-ghost {
+    @apply btn border-0 bg-transparent px-3 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100;
+  }
+
+  /* ---------- Navigation ---------- */
   .nav-item {
-    @apply flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-all duration-150 ease-smooth hover:bg-zinc-900 hover:text-zinc-100;
+    @apply flex w-full items-center gap-3 rounded-lg border-l-2 border-transparent px-3 py-2.5 text-sm font-medium text-slate-500 transition-all duration-150 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100;
   }
   .nav-item-active {
-    @apply bg-accent-900/40 text-accent-300 shadow-accent-glow;
+    @apply border-l-2 border-teal-600 bg-teal-600/10 text-teal-700 dark:bg-teal-600/15 dark:text-teal-400;
   }
+
+  /* ---------- Typography ---------- */
   .section-title {
-    @apply text-lg font-semibold tracking-tight text-zinc-100;
+    @apply text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400;
+  }
+
+  /* ---------- Form controls ---------- */
+  .input {
+    @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none transition-colors focus:border-teal-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500;
+  }
+
+  /* ---------- Badges ---------- */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide;
+  }
+  .badge-teal {
+    @apply badge border-teal-600/30 bg-teal-600/10 text-teal-700 dark:border-teal-600/40 dark:bg-teal-600/15 dark:text-teal-400;
+  }
+  .badge-ok {
+    @apply badge border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-600/15 dark:text-emerald-400;
+  }
+  .badge-warn {
+    @apply badge border-amber-600/30 bg-amber-600/10 text-amber-700 dark:border-amber-600/40 dark:bg-amber-600/15 dark:text-amber-400;
+  }
+  .badge-danger {
+    @apply badge border-red-600/30 bg-red-600/10 text-red-700 dark:border-red-600/40 dark:bg-red-600/15 dark:text-red-400;
+  }
+  .badge-neutral {
+    @apply badge border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300;
   }
 }

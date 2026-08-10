@@ -5,26 +5,34 @@ import {
   AppWindow,
   SlidersHorizontal,
   Zap,
+  Download,
+  Wrench,
+  Rocket,
 } from "lucide-react";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "install", label: "Install", icon: Download },
   { id: "clean", label: "Deep Clean", icon: SprayCan },
   { id: "debloat", label: "Debloater", icon: AppWindow },
   { id: "tweaks", label: "System Tweaks", icon: SlidersHorizontal },
+  { id: "tuning", label: "Tuning", icon: Wrench },
+  { id: "profiles", label: "Profiles", icon: Rocket },
 ];
 
 export default function Sidebar({ tab, onTab, running }) {
   const [hover, setHover] = useState(null);
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-panel-border bg-panel/40">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-600 shadow-accent-glow">
-          <Zap size={18} className="text-white" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600">
+          <Zap size={18} className="text-white" strokeWidth={2} />
         </div>
         <div>
-          <p className="text-sm font-bold tracking-tight text-zinc-100">PC Optimizer</p>
-          <p className="text-[11px] text-zinc-500">Power-user suite</p>
+          <p className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            PC Optimizer
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">Power-user suite</p>
         </div>
       </div>
 
@@ -42,7 +50,7 @@ export default function Sidebar({ tab, onTab, running }) {
                 hover === item.id && !active ? "translate-x-0.5" : ""
               }`}
             >
-              <Icon size={17} className={active ? "text-accent-400" : ""} />
+              <Icon size={17} strokeWidth={2} className={active ? "text-teal-600 dark:text-teal-400" : ""} />
               {item.label}
             </button>
           );
@@ -50,8 +58,8 @@ export default function Sidebar({ tab, onTab, running }) {
       </nav>
 
       <div className="mt-auto px-5 py-4">
-        <div className="rounded-lg border border-panel-border bg-zinc-950/60 p-3 text-[11px] text-zinc-500">
-          <p className="font-semibold text-zinc-400">v0.1.0</p>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          <p className="font-semibold text-slate-700 dark:text-slate-300">v2.1.0</p>
           <p className="mt-0.5">
             {running ? "Operation running…" : "Idle · waiting for input"}
           </p>

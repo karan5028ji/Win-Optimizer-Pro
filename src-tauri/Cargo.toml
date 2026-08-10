@@ -1,13 +1,13 @@
 [package]
-name = "pc-optimizer"
-version = "0.1.0"
-description = "PC Optimizer - power-user suite"
-authors = ["PC Optimizer"]
+name = "win-optimizer-pro"
+version = "2.1.0"
+description = "Win-Optimizer-Pro - power-user suite"
+authors = ["Win-Optimizer-Pro"]
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "pc_optimizer_lib"
+name = "win_optimizer_pro_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
