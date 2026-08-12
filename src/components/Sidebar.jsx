@@ -59,7 +59,7 @@ export default function Sidebar({ tab, onTab, running }) {
 
       <div className="mt-auto px-5 py-4">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-          <p className="font-semibold text-slate-700 dark:text-slate-300">v2.1.0</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-300">v2.1.1</p>
           <p className="mt-0.5">
             {running ? "Operation running…" : "Idle · waiting for input"}
           </p>

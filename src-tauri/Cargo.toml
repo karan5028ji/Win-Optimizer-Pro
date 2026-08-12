@@ -1,6 +1,6 @@
 [package]
 name = "win-optimizer-pro"
-version = "2.1.0"
+version = "2.1.1"
 description = "Win-Optimizer-Pro - power-user suite"
 authors = ["Win-Optimizer-Pro"]
 edition = "2021"
