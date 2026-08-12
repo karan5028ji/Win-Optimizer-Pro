@@ -113,8 +113,6 @@ v2.1.3 verified against the cleanup & progress rework on the production build:
 - Empty folders, missing folders and access-denied enumeration handled cleanly
 - Full `optimizer.ps1 -DryRun -Clean` phase flow (temp + network) exits clean with weighted progress
 
-Full historical scenario report (v2.1.1, 35/35 backend scenarios): **[REPORT.md](REPORT.md)**.
-
 ## 🔧 Development
 
 ```powershell
