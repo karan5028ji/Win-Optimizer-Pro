@@ -41,6 +41,20 @@ body {
   @apply bg-slate-400 dark:bg-slate-500;
 }
 
+/* Indeterminate progress bar — visibly "moves" during an operation so the UI
+   never looks frozen during long silent phases (winget/DISM/sfc). */
+@keyframes bar-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+.animate-bar {
+  animation: bar-slide 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 @layer components {
   /* ---------- Cards ---------- */
   .card {

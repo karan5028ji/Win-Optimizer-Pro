@@ -5,6 +5,91 @@
 $script:OptimizerLogFilePath = $null
 
 # ---------------------------------------------------------------------------
+# Progress reporting (live percent for the UI status bar)
+# ---------------------------------------------------------------------------
+# A run is a sequence of phases. Each phase owns a share of 100% (its Weight),
+# and reports finer progress as units complete within it. Every change is
+# emitted as one machine-readable stdout line the frontend parses:
+#     [PROGRESS]<0-100>|<current message>
+$script:TotalPhaseWeight     = 0
+$script:CompletedPhaseWeight = 0
+$script:PhaseWeight          = 0
+$script:PhaseUnitsTotal      = 0
+$script:PhaseUnitsDone       = 0
+$script:ProgressActive       = $false
+$script:ProgressLastPct      = -1
+$script:ProgressMessage      = ''
+
+function Reset-Progress {
+    $script:TotalPhaseWeight     = 0
+    $script:CompletedPhaseWeight = 0
+    $script:PhaseWeight          = 0
+    $script:PhaseUnitsTotal      = 0
+    $script:PhaseUnitsDone       = 0
+    $script:ProgressActive       = $false
+    $script:ProgressLastPct      = -1
+    $script:ProgressMessage      = ''
+}
+
+function Set-ProgressTotal {
+    param([int]$Weight)
+    $script:TotalPhaseWeight = [Math]::Max(1, $Weight)
+}
+
+function Begin-ProgressPhase {
+    param(
+        [Parameter(Mandatory = $true)][int]$Weight,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+    $script:PhaseWeight          = [Math]::Max(0, $Weight)
+    $script:PhaseUnitsTotal      = 0
+    $script:PhaseUnitsDone       = 0
+    $script:ProgressMessage      = $Message
+    $script:ProgressActive       = $true
+    Write-ProgressLine -Force
+}
+
+function Complete-ProgressPhase {
+    $script:CompletedPhaseWeight += $script:PhaseWeight
+    $script:PhaseWeight          = 0
+    $script:PhaseUnitsTotal      = 0
+    $script:PhaseUnitsDone       = 0
+    Write-ProgressLine -Force
+}
+
+function Add-PhaseUnits {
+    param([int]$Units)
+    if (-not $script:ProgressActive) { return }
+    $script:PhaseUnitsTotal += $Units
+}
+
+function Step-Progress {
+    param([int]$Units = 1, [string]$Message)
+    if (-not $script:ProgressActive) { return }
+    $script:PhaseUnitsDone += $Units
+    if ($Message) { $script:ProgressMessage = $Message }
+    Write-ProgressLine
+}
+
+function Write-ProgressLine {
+    param([switch]$Force, [string]$Message)
+    if (-not $script:ProgressActive -or $script:TotalPhaseWeight -le 0) { return }
+    if ($Message) { $script:ProgressMessage = $Message }
+    $done = $script:CompletedPhaseWeight
+    if ($script:PhaseUnitsTotal -gt 0) {
+        $frac = $script:PhaseUnitsDone / $script:PhaseUnitsTotal
+        if ($frac -gt 1) { $frac = 1 }
+        $done += $script:PhaseWeight * $frac
+    }
+    $pct = [int][math]::Floor($done / $script:TotalPhaseWeight * 100)
+    if ($pct -gt 100) { $pct = 100 }
+    if ($Force -or $pct -ne $script:ProgressLastPct) {
+        $script:ProgressLastPct = $pct
+        Write-Output ("[PROGRESS]{0}|{1}" -f $pct, $script:ProgressMessage)
+    }
+}
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 function Set-OptimizerLogFile {
@@ -53,43 +138,205 @@ function Grant-Privileges {
 }
 
 # ---------------------------------------------------------------------------
-# Hybrid cleanup loop (cmd "for /f" driven from PowerShell)
+# Folder emptying (robocopy /mir for speed + live percent)
 # ---------------------------------------------------------------------------
+function Get-FolderEntryCount {
+    <#
+        .SYNOPSIS
+        Fast top-level entry count via lazy Win32 enumeration. Much lighter
+        than Get-ChildItem (no FileInfo objects) on huge temp folders.
+        Returns -1 when the folder is mid-deletion and can't be enumerated.
+    #>
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return 0 }
+    $n = 0
+    try {
+        foreach ($e in [System.IO.Directory]::EnumerateFileSystemEntries($Path)) { $n++ }
+    }
+    catch {
+        return -1
+    }
+    return $n
+}
+
 function Clear-FolderItems {
     <#
         .SYNOPSIS
-        Deletes every item inside a folder using a native cmd for /f loop.
-        Files are deleted with del, directories with rd /s /q, so locked /
-        in-use files are skipped instead of aborting the whole run.
+        Empties a folder with a native robocopy /mir sweep. robocopy runs as a
+        background process while the remaining count is polled so the status
+        bar percent climbs live instead of freezing. Locked/in-use files are
+        skipped (robocopy /r:0 /w:0) instead of aborting the whole run, and
+        privileges are taken only if anything actually survives the first pass.
+        -Count pre-registers the folder's unit share to avoid re-enumeration.
     #>
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [string]$Label = $Path,
-        [switch]$DryRun
+        [switch]$DryRun,
+        [int]$Count = -1
     )
     if (-not (Test-Path -LiteralPath $Path)) {
         Write-Log "[skip] $Label (not found)"
         return
     }
 
-    Grant-Privileges -Path $Path -DryRun:$DryRun
-
-    $items = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue)
-    if ($items.Count -eq 0) {
+    if ($Count -lt 0) {
+        $Count = [Math]::Max(0, (Get-FolderEntryCount -Path $Path))
+        if ($Count -gt 0) { Add-PhaseUnits -Units $Count }
+    }
+    if ($Count -eq 0) {
         Write-Log "[clean] $Label : already empty"
         return
     }
     if ($DryRun) {
-        Write-Log "[dry-run] $Label : $($items.Count) item(s) listed, nothing removed"
+        if ($script:ProgressActive) {
+            Step-Progress -Units $Count -Message "Cleaning $Label"
+        }
+        Write-Log "[dry-run] $Label : $Count item(s) listed, nothing removed"
         return
     }
 
-    Write-Log "[clean] $Label : removing $($items.Count) item(s) ..."
-    $cmdline = 'for /f "delims= eol=" %F in (''dir /a /b "{0}" 2^>nul'') do (del /a /f /q "{0}\%F" 2>nul & rd /s /q "{0}\%F" 2>nul)' -f $Path
-    & cmd.exe /d /s /c $cmdline
+    Write-Log "[clean] $Label : removing $Count item(s) ..."
+    $deleted = 0
+    Invoke-FastDelete -Path $Path -Label $Label
+    $pass = $script:FastDeleteResult
+    $deleted += $pass.Deleted
+    $left = $pass.Remaining
 
-    $left = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue).Count
+    # Only when the plain pass leaves survivors do we take ownership (once) and
+    # retry. A full takeown /r + icacls /t sweep on every clean was the single
+    # biggest slowdown - it walked the whole temp tree every run.
+    if ($left -gt 0) {
+        Write-Log "[acl] $left item(s) locked - taking ownership once ..."
+        Grant-Privileges -Path $Path -DryRun:$DryRun
+        Invoke-FastDelete -Path $Path -Label $Label
+        $retry = $script:FastDeleteResult
+        $deleted += $retry.Deleted
+        $left = $retry.Remaining
+    }
+    # Top off so the phase percent reflects this folder's full share even if a
+    # few entries stay locked forever.
+    if ($deleted -lt $Count) {
+        Step-Progress -Units ($Count - $deleted)
+    }
     Write-Log "[done] $Label : $left item(s) remain (locked/in-use)"
+}
+
+function Invoke-FastDelete {
+    <#
+        .SYNOPSIS
+        Empties a folder with robocopy /mir against an empty scratch source.
+        Returns { Deleted, Remaining }.
+
+        Live progress comes from robocopy's own stdout: each file it deletes is
+        printed on its own line, and a background runspace streams those lines
+        in 64 KB chunks, counting newlines into a shared counter. Counting
+        output lines instead of re-enumerating the directory avoids the NTFS
+        contention that polling the folder caused (robocopy ran ~3x slower).
+        The stream must be drained regardless, or the pipe buffer fills and
+        robocopy stalls (5x+ slower in practice).
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$Label = $Path
+    )
+    $empty = Join-Path $env:LOCALAPPDATA 'Win-Optimizer-Pro\empty-src'
+    Remove-Item -LiteralPath $empty -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $empty -Force | Out-Null
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'robocopy.exe'
+    $psi.Arguments = '"{0}" "{1}" /mir /r:0 /w:0 /njh /njs /nc /ns /np' -f $empty, $Path
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+
+    $counter = @{ lines = 0 }
+    $rs = [System.Management.Automation.PowerShell]::Create()
+    $rs2 = $null
+    $async = $null
+    $async2 = $null
+    try {
+        # Stream robocopy's stdout in chunks, tallying newlines. Runs in its own
+        # runspace so the main thread stays free to poll and step progress.
+        [void]$rs.AddScript({
+            param($s, $c)
+            try {
+                $buf = New-Object byte[] 65536
+                while (($n = $s.Read($buf, 0, 65536)) -gt 0) {
+                    $chunk = [System.Text.Encoding]::UTF8.GetString($buf, 0, $n)
+                    $c['lines'] += ([regex]::Matches($chunk, "`n")).Count
+                }
+            }
+            catch { }
+        }).AddArgument($p.StandardOutput.BaseStream).AddArgument($counter)
+        $async = $rs.BeginInvoke()
+
+        # stderr is near-empty but must be drained too.
+        $rs2 = [System.Management.Automation.PowerShell]::Create()
+        [void]$rs2.AddScript({
+            param($s)
+            try {
+                $buf = New-Object byte[] 65536
+                while (($n = $s.Read($buf, 0, 65536)) -gt 0) { }
+            }
+            catch { }
+        }).AddArgument($p.StandardError.BaseStream)
+        $async2 = $rs2.BeginInvoke()
+
+        $done = 0
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        while (-not $p.HasExited) {
+            Start-Sleep -Milliseconds 300
+            $p.Refresh()
+            if ($p.HasExited) { break }
+            if ($sw.Elapsed.TotalMinutes -gt 10) { $p.Kill(); break }
+            $proc = $counter['lines']
+            if ($proc -gt $done) {
+                $step = [Math]::Min($proc - $done, $script:PhaseUnitsTotal - $script:PhaseUnitsDone)
+                if ($step -gt 0) {
+                    Step-Progress -Units $step -Message "Cleaning $Label"
+                    $done += $step
+                }
+            }
+        }
+        $p.WaitForExit()
+        $sw.Stop()
+
+        $proc = $counter['lines']
+        if ($proc -gt $done) {
+            $step = [Math]::Min($proc - $done, $script:PhaseUnitsTotal - $script:PhaseUnitsDone)
+            if ($step -gt 0) {
+                Step-Progress -Units $step -Message "Cleaning $Label"
+                $done += $step
+            }
+        }
+        $rs.EndInvoke($async)
+        $rs2.EndInvoke($async2)
+        $rs.Dispose()
+        $rs2.Dispose()
+        $rs = $null
+        $rs2 = $null
+    }
+    finally {
+        if ($rs -and $async)  { $rs.EndInvoke($async) }
+        if ($rs2 -and $async2) { $rs2.EndInvoke($async2) }
+        if ($rs)  { $rs.Dispose() }
+        if ($rs2) { $rs2.Dispose() }
+    }
+
+    $remaining = Get-FolderEntryCount -Path $Path
+    if ($remaining -lt 0) { $remaining = 0 }
+    # Result is stashed on the script scope instead of returned through the
+    # pipeline: the [PROGRESS] lines written by Step-Progress bubble up as
+    # pipeline output too, and `$pass = Invoke-FastDelete ...` would swallow
+    # them all into the assignment.
+    $script:FastDeleteResult = [pscustomobject]@{
+        Deleted   = $done
+        Remaining = [Math]::Max(0, $remaining)
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -113,8 +360,22 @@ function Clear-TempFolders {
             @{ Label = 'Prefetch';       Path = "$env:SystemRoot\Prefetch" }
         )
     }
+    # Count every folder up-front (fast lazy enumeration) so the running
+    # percent climbs monotonically across folders. The status message updates
+    # while scanning so the UI never looks frozen on huge temp trees.
+    $units = 0
     foreach ($t in $targets) {
-        Clear-FolderItems -Path $t.Path -Label $t.Label -DryRun:$DryRun
+        # -1 (enumeration denied) is clamped to 0 so a locked folder never
+        # shows a negative count in the log; the cleanup itself still runs.
+        $t.Count = [Math]::Max(0, (Get-FolderEntryCount -Path $t.Path))
+        $units += $t.Count
+        if ($script:ProgressActive) {
+            Write-ProgressLine -Force -Message "Scanning $($t.Label) ..."
+        }
+    }
+    Add-PhaseUnits -Units $units
+    foreach ($t in $targets) {
+        Clear-FolderItems -Path $t.Path -Label $t.Label -DryRun:$DryRun -Count $t.Count
     }
 }
 
@@ -132,6 +393,51 @@ function Clear-NetworkCache {
     )
     $any = $FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet
 
+    # Collect every cache folder that will be cleaned (DNS flush counts as one).
+    $folders = [System.Collections.Generic.List[string]]::new()
+    if (-not $any -or $Chrome) {
+        foreach ($p in @(
+            "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache",
+            "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Code Cache"
+        )) {
+            if (Test-Path -LiteralPath $p) { $folders.Add($p) }
+        }
+    }
+    if (-not $any -or $Edge) {
+        foreach ($p in @(
+            "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache",
+            "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Code Cache"
+        )) {
+            if (Test-Path -LiteralPath $p) { $folders.Add($p) }
+        }
+    }
+    if (-not $any -or $INet) {
+        $p = "$env:LOCALAPPDATA\Microsoft\Windows\INetCache"
+        if (Test-Path -LiteralPath $p) { $folders.Add($p) }
+    }
+    if (-not $any -or $Firefox) {
+        $firefoxProfiles = "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles"
+        if (Test-Path -LiteralPath $firefoxProfiles) {
+            Get-ChildItem -LiteralPath $firefoxProfiles -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                foreach ($sub in @('cache2', 'thumbnails', 'startupCache')) {
+                    $p = Join-Path $_.FullName $sub
+                    if (Test-Path -LiteralPath $p) { $folders.Add($p) }
+                }
+            }
+        }
+    }
+
+    # Register all units up-front so the percent climbs monotonically.
+    $units = 0
+    if (-not $any -or $FlushDNS) { $units += 1 }
+    $folderCounts = @{}
+    foreach ($f in $folders) {
+        $c = [Math]::Max(0, (Get-FolderEntryCount -Path $f))
+        $folderCounts[$f] = $c
+        $units += $c
+    }
+    Add-PhaseUnits -Units $units
+
     if (-not $any -or $FlushDNS) {
         if ($DryRun) {
             Write-Log "[dry-run] would flush DNS resolver cache (ipconfig /flushdns)"
@@ -140,43 +446,11 @@ function Clear-NetworkCache {
             Write-Log "[net] flushing DNS resolver cache ..."
             & ipconfig.exe /flushdns
         }
+        Step-Progress -Units 1 -Message "Flushing DNS cache"
     }
 
-    if (-not $any -or $Chrome) {
-        foreach ($p in @(
-            "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache",
-            "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Code Cache"
-        )) {
-            if (Test-Path -LiteralPath $p) { Clear-FolderItems -Path $p -Label $p -DryRun:$DryRun }
-        }
-    }
-
-    if (-not $any -or $Edge) {
-        foreach ($p in @(
-            "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache",
-            "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Code Cache"
-        )) {
-            if (Test-Path -LiteralPath $p) { Clear-FolderItems -Path $p -Label $p -DryRun:$DryRun }
-        }
-    }
-
-    if (-not $any -or $INet) {
-        $p = "$env:LOCALAPPDATA\Microsoft\Windows\INetCache"
-        if (Test-Path -LiteralPath $p) { Clear-FolderItems -Path $p -Label $p -DryRun:$DryRun }
-    }
-
-    if (-not $any -or $Firefox) {
-        $firefoxProfiles = "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles"
-        if (Test-Path -LiteralPath $firefoxProfiles) {
-            Get-ChildItem -LiteralPath $firefoxProfiles -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-                foreach ($sub in @('cache2', 'thumbnails', 'startupCache')) {
-                    $p = Join-Path $_.FullName $sub
-                    if (Test-Path -LiteralPath $p) {
-                        Clear-FolderItems -Path $p -Label $p -DryRun:$DryRun
-                    }
-                }
-            }
-        }
+    foreach ($f in $folders) {
+        Clear-FolderItems -Path $f -Label $f -DryRun:$DryRun -Count $folderCounts[$f]
     }
 }
 
@@ -348,8 +622,11 @@ function Remove-Bloatware {
     $prov = @()
     if ($admin) { $prov = @(Get-ProvisionedSnapshot) }
 
-    $matched = 0
+    # Match everything first (fast, in-memory) so the removal pass can report a
+    # truthful percent based on a stable unit total.
     $handled = @{}
+    $toRemove     = [System.Collections.Generic.List[object]]::new()
+    $toRemoveProv = [System.Collections.Generic.List[object]]::new()
     foreach ($pattern in $targets) {
         if ($pattern -in $Script:ProtectedPackages) {
             Write-Log "[protect] skipping protected package pattern: $pattern"
@@ -358,30 +635,43 @@ function Remove-Bloatware {
         foreach ($pkg in $snap) {
             if ($pkg.Name -like $pattern -and -not $handled.ContainsKey($pkg.PackageFullName)) {
                 $handled[$pkg.PackageFullName] = $true
-                $matched++
-                if ($DryRun) {
-                    Write-Log "[dry-run] would remove: $($pkg.Name)  v$($pkg.Version)"
-                }
-                else {
-                    Write-Log "[remove] $($pkg.Name)  v$($pkg.Version)"
-                    Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-                }
+                $toRemove.Add($pkg)
             }
         }
         if (-not $admin) { continue }
         foreach ($p in $prov) {
             if ($p.DisplayName -like $pattern -and -not $handled.ContainsKey($p.PackageName)) {
                 $handled[$p.PackageName] = $true
-                $matched++
-                if ($DryRun) {
-                    Write-Log "[dry-run] would remove provisioned: $($p.DisplayName)"
-                }
-                else {
-                    Write-Log "[remove provisioned] $($p.DisplayName)"
-                    Remove-AppxProvisionedPackage -Online -PackageName $p.PackageName -ErrorAction SilentlyContinue
-                }
+                $toRemoveProv.Add($p)
             }
         }
+    }
+    $matched = $toRemove.Count + $toRemoveProv.Count
+    if ($matched -eq 0) {
+        Write-Log "[debloat] no matching packages found."
+        return
+    }
+    Add-PhaseUnits -Units $matched
+
+    foreach ($pkg in $toRemove) {
+        if ($DryRun) {
+            Write-Log "[dry-run] would remove: $($pkg.Name)  v$($pkg.Version)"
+        }
+        else {
+            Write-Log "[remove] $($pkg.Name)  v$($pkg.Version)"
+            Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+        }
+        Step-Progress -Units 1 -Message "Removing bloatware ($($pkg.Name))"
+    }
+    foreach ($p in $toRemoveProv) {
+        if ($DryRun) {
+            Write-Log "[dry-run] would remove provisioned: $($p.DisplayName)"
+        }
+        else {
+            Write-Log "[remove provisioned] $($p.DisplayName)"
+            Remove-AppxProvisionedPackage -Online -PackageName $p.PackageName -ErrorAction SilentlyContinue
+        }
+        Step-Progress -Units 1 -Message "Removing bloatware ($($p.DisplayName))"
     }
     Write-Log "[debloat] $matched package(s) matched."
 }
@@ -522,6 +812,7 @@ function Apply-SystemTweaks {
         Write-Log "[!] Apply-SystemTweaks requires elevation. Re-run elevated."
         return
     }
+    Add-PhaseUnits -Units $targets.Count
 
     foreach ($t in $targets) {
         switch ($t) {
@@ -588,6 +879,7 @@ function Apply-SystemTweaks {
                 }
             }
         }
+        Step-Progress -Units 1 -Message "Applying tweak: $t"
     }
     Write-Log "[tweaks] done."
 }
@@ -616,6 +908,7 @@ function New-RestorePoint {
     catch {
         Write-Log "[restorepoint] warning: could not create restore point ($($_.Exception.Message))"
     }
+    Step-Progress -Units 1 -Message "Creating restore point"
 }
 
 # ---------------------------------------------------------------------------

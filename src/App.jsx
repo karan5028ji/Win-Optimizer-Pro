@@ -76,6 +76,7 @@ export default function App() {
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState([]);
   const [statusLine, setStatusLine] = useState("");
+  const [progress, setProgress] = useState(null);
   const [sysInfo, setSysInfo] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [dark, setDark] = useState(() =>
@@ -85,6 +86,11 @@ export default function App() {
   const logRef = useRef([]);
   const toastIdRef = useRef(0);
   const shownRef = useRef(new Set());
+  const statusRef = useRef("");
+  const progressRef = useRef(null);
+  const curSeqRef = useRef(0);
+  const runSeqRef = useRef(0);
+  const flushTimerRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -99,14 +105,47 @@ export default function App() {
     }, 5000);
   }, []);
 
+  // Coalesce incoming log lines into React state. The PowerShell engine can
+  // emit hundreds of lines a second (winget/DISM/sfc); rendering every single
+  // one synchronously froze the UI on slower machines (glitchy, unresponsive
+  // buttons). We batch to one state flush per ~80ms.
+  const flushLogs = useCallback(() => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    setLogs([...logRef.current]);
+    setStatusLine(statusRef.current);
+    setProgress(progressRef.current);
+  }, []);
+
   useEffect(() => {
     isElevated().then(setElevated).catch(() => setElevated(false));
     getSystemInfo().then(setSysInfo).catch(() => {});
     const unLog = onLog((line) => {
-      const clean = line.trim();
-      logRef.current = [...logRef.current, line].slice(-3000);
-      setLogs(logRef.current);
-      if (clean) setStatusLine(clean);
+      const clean = String(line).trim();
+      // Live percent from the engine: "[PROGRESS]<0-100>|<message>".
+      const prog =
+        clean.match(/^\[PROGRESS\](\d{1,3})\|(.*)$/) ||
+        clean.match(/^\[stderr\]\s*\[PROGRESS\](\d{1,3})\|(.*)$/);
+      if (prog) {
+        progressRef.current = {
+          pct: Math.max(0, Math.min(100, Number(prog[1]))),
+          message: prog[2],
+        };
+        if (!flushTimerRef.current) {
+          flushTimerRef.current = setTimeout(flushLogs, 80);
+        }
+        return; // progress lines are meta, not console log entries
+      }
+      logRef.current.push(line);
+      if (logRef.current.length > 4000) {
+        logRef.current.splice(0, logRef.current.length - 4000);
+      }
+      if (clean) statusRef.current = clean;
+      if (!flushTimerRef.current) {
+        flushTimerRef.current = setTimeout(flushLogs, 80);
+      }
       const pfFail = clean.match(/^PRE\|([^|]+)\|fail\|(.+)/);
       if (pfFail) {
         const key = `preflight:${pfFail[1]}:${pfFail[2]}`;
@@ -116,40 +155,67 @@ export default function App() {
         }
       }
     });
-    const unDone = onDone(() => {
-      const wasRunning = runningRef.current;
+    const unDone = onDone((seq) => {
+      if (!runningRef.current) return;
+      // Ignore a stale "done" from a previously stopped run that raced a new one.
+      if (typeof seq === "number" && seq !== curSeqRef.current) return;
       runningRef.current = false;
+      flushLogs();
       setRunning(false);
+      statusRef.current = "Finished.";
       setStatusLine("Finished.");
-      if (wasRunning) toast("Operation finished.", "success");
+      toast("Operation finished.", "success");
     });
     return () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
       unLog.then((f) => f());
       unDone.then((f) => f());
     };
-  }, [toast]);
+  }, [toast, flushLogs]);
 
-  const pushLine = useCallback((line) => {
-    logRef.current = [...logRef.current, line].slice(-3000);
-    setLogs(logRef.current);
-  }, []);
+  const pushLine = useCallback(
+    (line) => {
+      logRef.current.push(line);
+      if (logRef.current.length > 4000) {
+        logRef.current.splice(0, logRef.current.length - 4000);
+      }
+      if (!flushTimerRef.current) {
+        flushTimerRef.current = setTimeout(flushLogs, 80);
+      }
+    },
+    [flushLogs]
+  );
 
   const run = useCallback(
     async (args) => {
       if (runningRef.current) return;
       const flags = dryRun ? [...args, "-DryRun"] : [...args];
+      const seq = ++runSeqRef.current;
+      // Tag this run *before* the process spawns so a stale "done" from a
+      // just-killed run can never be mistaken for this run's completion.
+      curSeqRef.current = seq;
       runningRef.current = true;
       setRunning(true);
+      statusRef.current = "";
       setStatusLine("");
+      progressRef.current = null;
+      setProgress(null);
       logRef.current = [];
       setLogs([]);
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
       pushLine(`> powershell optimizer.ps1 ${flags.join(" ")} -NoElevate\n`);
       try {
-        await runOptimizer([...flags, "-NoElevate"]);
+        await runOptimizer(seq, [...flags, "-NoElevate"]);
       } catch (err) {
         pushLine(`[error] ${err}\n`);
         runningRef.current = false;
         setRunning(false);
+        progressRef.current = null;
+        setProgress(null);
+        statusRef.current = "Failed.";
         setStatusLine("Failed.");
         toast(String(err), "error");
       }
@@ -246,7 +312,7 @@ export default function App() {
             <TabComponent />
           </main>
 
-          <Console running={running} onCancel={cancel} />
+            <Console running={running} progress={progress} onCancel={cancel} />
         </div>
       </div>
       <Toasts toasts={toasts} />

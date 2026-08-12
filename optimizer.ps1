@@ -275,52 +275,89 @@ if ($Restore) {
     Restore-Bloatware -DryRun:$DryRun
 }
 
-if ($Network) {
-    Clear-NetworkCache -DryRun:$DryRun
+# --- Phased execution (drives the live percent in the UI status bar) --------
+# Register the total weight up-front so the percent climbs monotonically
+# instead of jumping back when the next phase is announced.
+Reset-Progress
+$tempPhase = $Clean -or $All -or $UserTemp -or $WindowsTemp -or $Prefetch
+$netPhase  = $Network -or $Clean -or $All -or $FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet
+$debPhase  = $Debloat -or $All
+$twkPhase  = $Tweaks -or $All
+$rpPhase   = $CreateRestorePoint -and ($debPhase -or $twkPhase)
+$totalWeight = 0
+if ($tempPhase)     { $totalWeight += 25 }
+if ($netPhase)      { $totalWeight += 25 }
+if ($rpPhase)       { $totalWeight += 5 }
+if ($debPhase)      { $totalWeight += 30 }
+if ($twkPhase)      { $totalWeight += 20 }
+if ($UndoTweaks)    { $totalWeight += 20 }
+Set-ProgressTotal -Weight $totalWeight
+
+if ($tempPhase) {
+    Begin-ProgressPhase -Weight 25 -Message 'Cleaning temp folders'
+    if ($UserTemp -or $WindowsTemp -or $Prefetch) {
+        Clear-TempFolders -UserTemp:$UserTemp -WindowsTemp:$WindowsTemp -Prefetch:$Prefetch -DryRun:$DryRun
+    }
+    else {
+        Clear-TempFolders -DryRun:$DryRun
+    }
+    Complete-ProgressPhase
 }
 
-if ($Clean) {
-    Clear-TempFolders -DryRun:$DryRun
-    Clear-NetworkCache -DryRun:$DryRun
+if ($netPhase) {
+    Begin-ProgressPhase -Weight 25 -Message 'Clearing network & browser cache'
+    if ($FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet) {
+        Clear-NetworkCache -FlushDNS:$FlushDNS -Chrome:$Chrome -Edge:$Edge -Firefox:$Firefox -INet:$INet -DryRun:$DryRun
+    }
+    else {
+        Clear-NetworkCache -DryRun:$DryRun
+    }
+    Complete-ProgressPhase
 }
 
-# Granular cleanup (used by the GUI deep-clean tab)
-if ($UserTemp -or $WindowsTemp -or $Prefetch) {
-    Clear-TempFolders -UserTemp:$UserTemp -WindowsTemp:$WindowsTemp -Prefetch:$Prefetch -DryRun:$DryRun
-}
-if ($FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet) {
-    Clear-NetworkCache -FlushDNS:$FlushDNS -Chrome:$Chrome -Edge:$Edge -Firefox:$Firefox -INet:$INet -DryRun:$DryRun
-}
-
-if ($Debloat) {
+if ($debPhase) {
     if (Test-Preflight -Action 'debloat') {
-        if ($CreateRestorePoint) { New-RestorePoint -DryRun:$DryRun }
+        if ($CreateRestorePoint) {
+            Begin-ProgressPhase -Weight 5 -Message 'Creating restore point'
+            New-RestorePoint -DryRun:$DryRun
+            Complete-ProgressPhase
+        }
+        Begin-ProgressPhase -Weight 30 -Message 'Removing bloatware'
         if ($Category.Count -gt 0 -or $Package.Count -gt 0) {
             Remove-Bloatware -Category $Category -Package $Package -DryRun:$DryRun
         }
         else {
             Remove-Bloatware -All -DryRun:$DryRun
         }
+        Complete-ProgressPhase
     }
 }
 
-if ($Tweaks) {
-    if ($CreateRestorePoint) { New-RestorePoint -DryRun:$DryRun }
+if ($twkPhase) {
+    if ($CreateRestorePoint) {
+        Begin-ProgressPhase -Weight 5 -Message 'Creating restore point'
+        New-RestorePoint -DryRun:$DryRun
+        Complete-ProgressPhase
+    }
+    Begin-ProgressPhase -Weight 20 -Message 'Applying system tweaks'
     if ($Tweak.Count -gt 0) {
         Apply-SystemTweaks -Tweak $Tweak -DryRun:$DryRun
     }
     else {
         Apply-SystemTweaks -All -DryRun:$DryRun
     }
+    Complete-ProgressPhase
 }
 
 if ($UndoTweaks) {
+    Begin-ProgressPhase -Weight 20 -Message 'Reverting system tweaks'
     if ($Tweak.Count -gt 0) {
         Undo-SystemTweaks -Tweak $Tweak -DryRun:$DryRun
     }
     else {
         Undo-SystemTweaks -All -DryRun:$DryRun
     }
+    Complete-ProgressPhase
 }
 
 # --- WinUtil-style feature dispatch ---
@@ -393,13 +430,6 @@ if ($SetStartup) {
 
 # --- Pre-flight (explicit call for the UI to display status) ---
 if ($Preflight) { Test-Preflight -Action $Preflight | Out-Null }
-
-if ($All) {
-    Clear-TempFolders -DryRun:$DryRun
-    Clear-NetworkCache -DryRun:$DryRun
-    Remove-Bloatware -All -DryRun:$DryRun
-    Apply-SystemTweaks -All -DryRun:$DryRun
-}
 
 # --- Summary ----------------------------------------------------------------
 $ranAnything = $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $Restore -or $Network -or $Clean -or $Debloat -or $Tweaks -or $UndoTweaks -or $All -or $UserTemp -or $WindowsTemp -or $Prefetch -or $FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet -or $WingetList -or $WingetInstall -or $WingetUpgrade -or $WingetUpgradeAll -or $WingetUninstall -or $ListDNS -or $SetDNS -or $ListUpdateModes -or $SetUpdateMode -or $ListPower -or $SetPower -or $ListFeatures -or $SetFeature -or $ListFixes -or $RunFix -or $ListPanels -or $OpenPanel -or $EnableSsh -or $DisableSsh -or $CreateWin11Iso -or $Profile -or $ExportConfig -or $ListConfigs -or $ImportConfig -or $SetContextMenu -or $ListStartup -or $SetStartup -or $Preflight

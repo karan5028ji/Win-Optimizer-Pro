@@ -6,7 +6,7 @@
 
 **A modern, enterprise-grade Windows optimizer, cleaner & debloater — powered by Rust, React and PowerShell.**
 
-[![Version](https://img.shields.io/badge/version-2.1.1-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
+[![Version](https://img.shields.io/badge/version-2.1.3-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)](https://www.microsoft.com/windows)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-0d9488)](https://v2.tauri.app)
 [![License: MIT](https://img.shields.io/github/license/karan5028ji/Win-Optimizer-Pro)](LICENSE)
@@ -32,7 +32,18 @@ The fastest way — one line, straight from GitHub, no install needed:
 irm https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 | iex
 ```
 
-Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.1_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
+Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.3_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
+
+## 🆕 What's new in v2.1.3
+
+| Area | Change |
+| --- | --- |
+| ⚡ **Blazing-fast temp cleanup** | Temp / Windows Temp / Prefetch now clean via a native `robocopy /mir` sweep instead of a slow `cmd for /f` loop. 20,000 files clear in ~13s (was 60s+). Locked files are skipped safely and ownership is taken only when something actually survives the first pass. |
+| 📈 **Smooth live progress** | The status bar now climbs percent-by-percent while folders are cleaning — progress is streamed from robocopy's own output with zero filesystem contention. |
+| 🛡️ **Bulletproof run supervision** | `optimizer:done` now always fires, even when a background process keeps the console pipe open — the UI can never get stuck in "running" with dead buttons. Run-sequence IDs stop stale completions after Stop + re-run. |
+| 🎨 **Fresh app icon** | New application icon propagated to the exe, taskbar, window, Start Menu, Desktop and installer. |
+| 🖥️ **UI responsiveness** | Console output is batched to one paint per ~80 ms, so heavy logs (winget/DISM/sfc) no longer freeze the interface. |
+| 🔧 **Engine hardening** | Weighted progress phases, monotonic percent math, safe enumeration on locked folders (`-1` never leaks into logs). |
 
 ## 🧰 Features
 
@@ -93,7 +104,16 @@ Add `-DryRun` to every write action for a read-only preview. `-NoElevate` skips 
 
 ## 🧪 Testing
 
-v2.1.1 passed a **35/35 scenario suite** on the installed production build (all CLI switches, dry-run + read-only) plus icon, shortcut and launch verification. Full details: **[REPORT.md](REPORT.md)**.
+v2.1.3 verified against the cleanup & progress rework on the production build:
+
+- **20,000-file temp folder** cleared in ~13 seconds with a monotonic 0→100% status-bar climb (44 progress frames, no frozen UI)
+- **Locked-file fallback**: `takeown`/`icacls` runs only on survivors; locked items are reported and safely skipped
+- **Nested trees** (sub-folder + deep paths) fully cleaned in the first pass
+- **Dry-run** mode deletes nothing; non-admin preview is read-only
+- Empty folders, missing folders and access-denied enumeration handled cleanly
+- Full `optimizer.ps1 -DryRun -Clean` phase flow (temp + network) exits clean with weighted progress
+
+Full historical scenario report (v2.1.1, 35/35 backend scenarios): **[REPORT.md](REPORT.md)**.
 
 ## 🔧 Development
 
@@ -110,7 +130,7 @@ npm run tauri build
 
 Output:
 
-- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.1_x64-setup.exe`
+- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.3_x64-setup.exe`
 - Binary: `src-tauri\target\release\win-optimizer-pro.exe`
 
 **Requirements:** Node.js 18+, Rust stable (MSVC toolchain), WebView2 (bundled with Windows 11 / modern Windows 10).

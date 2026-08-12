@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -9,16 +9,26 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, State};
 use windows_sys::Win32::UI::Shell::{IsUserAnAdmin, ShellExecuteW};
 
-struct Runner(Mutex<Option<Child>>);
+struct Runner {
+    child: Arc<Mutex<Option<Child>>>,
+}
 
 impl Runner {
+    fn new() -> Self {
+        Self {
+            child: Arc::new(Mutex::new(None)),
+        }
+    }
     fn store(&self, child: Child) {
-        *self.0.lock().unwrap() = Some(child);
+        *self.child.lock().unwrap() = Some(child);
     }
     fn stop(&self) {
-        if let Some(mut child) = self.0.lock().unwrap().take() {
+        if let Some(mut child) = self.child.lock().unwrap().take() {
             kill_tree(&mut child);
         }
+    }
+    fn child_handle(&self) -> Arc<Mutex<Option<Child>>> {
+        Arc::clone(&self.child)
     }
 }
 
@@ -479,10 +489,100 @@ async fn get_tweak_registry_info(
     .await
 }
 
+/// Emitted when a run finishes. Payload = the run sequence id (u32), supplied
+/// by the frontend so it can tell a real completion from a stale event that
+/// raced in after a Stop + immediate re-run.
+const DONE_EVENT: &str = "optimizer:done";
+
+/// How long readers may take to drain buffered output after the process exits
+/// before we force-kill the tree. A grandchild that inherits the stdout pipe
+/// keeps the pipe open past EOF; without this fallback `optimizer:done` would
+/// never fire and the UI would stay stuck in "running" with every button dead.
+const DRAIN_GRACE: Duration = Duration::from_secs(5);
+
+/// Watches a child process and its stdout/stderr reader threads, then always
+/// reports completion. Guarantees `optimizer:done` fires even when a grandchild
+/// inherited the stdout pipe and keeps it open after the parent has exited.
+fn supervise_run<L>(
+    stdout: Option<ChildStdout>,
+    stderr: Option<ChildStderr>,
+    child: Arc<Mutex<Option<Child>>>,
+    seq: u32,
+    emit_log: L,
+    emit_done: impl FnOnce(u32),
+) where
+    L: Fn(String) + Clone + Send + Sync + 'static,
+{
+    let mut threads = Vec::new();
+    if let Some(out) = stdout {
+        let e = emit_log.clone();
+        threads.push(thread::spawn(move || {
+            for line in BufReader::new(out).lines().map_while(Result::ok) {
+                e(line);
+            }
+        }));
+    }
+    if let Some(err) = stderr {
+        let e = emit_log;
+        threads.push(thread::spawn(move || {
+            for line in BufReader::new(err).lines().map_while(Result::ok) {
+                e(format!("[stderr] {line}"));
+            }
+        }));
+    }
+
+    // Wait for the child process to exit, reaping it from state when done.
+    // Polling (instead of a blocking wait) keeps this decoupled from Stop.
+    loop {
+        let exited = {
+            let mut guard = child.lock().unwrap();
+            match guard.as_mut().map(|c| c.try_wait()) {
+                Some(Ok(Some(_))) => {
+                    guard.take();
+                    true
+                }
+                Some(Ok(None)) => false,
+                _ => {
+                    guard.take();
+                    true
+                }
+            }
+        };
+        if exited {
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    // Drain buffered output with a grace period. If a grandchild is still
+    // holding the pipe, force-kill the whole tree to unblock the readers.
+    let deadline = Instant::now() + DRAIN_GRACE;
+    loop {
+        if threads.iter().all(|t| t.is_finished()) {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let mut c = child.lock().unwrap().take();
+            if let Some(c) = c.as_mut() {
+                kill_tree(c);
+            }
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    for t in threads {
+        let _ = t.join();
+    }
+
+    // Always emit done so the UI can never stay stuck in "running".
+    emit_done(seq);
+}
+
 #[tauri::command]
 fn run_optimizer(
     app: AppHandle,
     state: State<'_, Runner>,
+    seq: u32,
     args: Vec<String>,
 ) -> Result<(), String> {
     let script = resolve_script(&app).ok_or_else(|| "optimizer.ps1 not found".to_string())?;
@@ -492,28 +592,21 @@ fn run_optimizer(
     state.store(child);
 
     let handle = app.clone();
+    let child_handle = state.child_handle();
     thread::spawn(move || {
-        let mut threads = Vec::new();
-        if let Some(out) = stdout {
-            let h = handle.clone();
-            threads.push(thread::spawn(move || {
-                for line in BufReader::new(out).lines().map_while(Result::ok) {
-                    let _ = h.emit("optimizer:log", line);
-                }
-            }));
-        }
-        if let Some(err) = stderr {
-            let h = handle.clone();
-            threads.push(thread::spawn(move || {
-                for line in BufReader::new(err).lines().map_while(Result::ok) {
-                    let _ = h.emit("optimizer:log", format!("[stderr] {line}"));
-                }
-            }));
-        }
-        for t in threads {
-            let _ = t.join();
-        }
-        let _ = handle.emit("optimizer:done", ());
+        let emit = handle.clone();
+        supervise_run(
+            stdout,
+            stderr,
+            child_handle,
+            seq,
+            move |line| {
+                let _ = emit.emit("optimizer:log", line);
+            },
+            move |s| {
+                let _ = handle.emit(DONE_EVENT, s);
+            },
+        );
     });
     Ok(())
 }
@@ -559,7 +652,7 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-        .manage(Runner(Mutex::new(None)))
+        .manage(Runner::new())
         .manage(AppCache::default())
         .invoke_handler(tauri::generate_handler![
             is_elevated,
@@ -583,4 +676,68 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for the reported bug where the app appeared frozen
+    /// ("status bar not moving / buttons not working"). If a grandchild
+    /// inherits the stdout pipe and keeps it open after the parent exits, the
+    /// old reader logic blocked on EOF forever and `optimizer:done` never
+    /// fired — leaving the UI stuck in "running" with every button disabled.
+    #[test]
+    fn done_fires_even_when_grandchild_holds_stdout_pipe() {
+        // powershell exits instantly, but `start /b` launches a grandchild that
+        // inherits the stdout pipe and holds it open for 20s.
+        let mut child = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Write-Output 'parent output'; cmd /c \"start /b powershell -NoProfile -Command Start-Sleep -Seconds 20 & exit\"; exit",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn powershell");
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+        let shared = Arc::new(Mutex::new(Some(child)));
+
+        let logs = Arc::new(Mutex::new(Vec::<String>::new()));
+        let done = Arc::new(Mutex::new(false));
+        let (l, d) = (Arc::clone(&logs), Arc::clone(&done));
+        let seq = 7u32;
+        let supervisor = thread::spawn(move || {
+            supervise_run(
+                stdout,
+                stderr,
+                shared,
+                seq,
+                move |line| l.lock().unwrap().push(line),
+                move |s| *d.lock().unwrap() = s == seq,
+            );
+        });
+
+        // done must fire well before the 20s grandchild finishes (grace kill).
+        let deadline = Instant::now() + Duration::from_secs(12);
+        while Instant::now() < deadline {
+            if *done.lock().unwrap() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        let fired = *done.lock().unwrap();
+        let _ = supervisor.join();
+
+        assert!(fired, "optimizer:done must fire despite a grandchild holding the stdout pipe");
+        assert!(
+            !logs.lock().unwrap().is_empty(),
+            "parent output should still be captured"
+        );
+    }
 }

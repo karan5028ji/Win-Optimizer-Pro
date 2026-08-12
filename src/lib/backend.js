@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 
 export const isElevated = () => invoke("is_elevated");
 
-export const runOptimizer = (args) => invoke("run_optimizer", { args });
+export const runOptimizer = (seq, args) => invoke("run_optimizer", { seq, args });
 
 export const stopOptimizer = () => invoke("stop_optimizer");
 
@@ -46,7 +46,7 @@ export const getTweakState = async () => {
 
 export const onLog = (cb) => listen("optimizer:log", (e) => cb(String(e.payload)));
 
-export const onDone = (cb) => listen("optimizer:done", () => cb());
+export const onDone = (cb) => listen("optimizer:done", (e) => cb(e.payload));
 
 // --- WinUtil-style features ---
 export const getWingetApps = async () => {
