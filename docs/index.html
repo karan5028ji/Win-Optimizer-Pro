@@ -246,7 +246,6 @@
       @media (max-width: 860px) {
         .showcase-row, .showcase-row.flip { grid-template-columns: 1fr; gap: 32px; margin-bottom: 80px; }
         .showcase-row.flip .shot { order: 0; }
-        .install-grid { grid-template-columns: 1fr; }
       }
 
       /* ---------- Features ---------- */
@@ -282,6 +281,9 @@
       .install .head { text-align: center; margin-bottom: 56px; }
       .install .head .section-sub { margin-left: auto; margin-right: auto; }
       .install-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+      @media (max-width: 860px) {
+        .install-grid { grid-template-columns: 1fr; }
+      }
       .panel {
         background: var(--bg-soft);
         border: 1px solid var(--hairline);
