@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { check } from "@tauri-apps/plugin-updater";
 import {
   CheckCircle2,
   Info,
@@ -122,6 +123,24 @@ export default function App() {
   useEffect(() => {
     isElevated().then(setElevated).catch(() => setElevated(false));
     getSystemInfo().then(setSysInfo).catch(() => {});
+    // Check for app updates once on startup. When one is available it is
+    // downloaded + installed in the background; the user is only asked to
+    // restart the app to apply it.
+    check()
+      .then((update) => {
+        if (!update) return;
+        toast(`Update ${update.version} available — installing…`, "info");
+        return update.downloadAndInstall().then(() => {
+          toast(
+            "Update installed. Please restart Win-Optimizer-Pro to finish.",
+            "success"
+          );
+        });
+      })
+      .catch((err) => {
+        if (String(err).toLowerCase().includes("does not have an update")) return;
+        console.warn("update check failed:", err);
+      });
     const unLog = onLog((line) => {
       const clean = String(line).trim();
       // Live percent from the engine: "[PROGRESS]<0-100>|<message>".

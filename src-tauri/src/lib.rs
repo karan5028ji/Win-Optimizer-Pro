@@ -805,6 +805,7 @@ fn request_elevation() {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Runner::new())
         .manage(AppCache::default())
         .invoke_handler(tauri::generate_handler![

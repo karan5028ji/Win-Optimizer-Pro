@@ -1,0 +1,69 @@
+name: Sign Release (SignPath)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sign (e.g. v2.1.4)"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  sign:
+    name: Sign installer with SignPath
+    runs-on: windows-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download unsigned installer from release
+        uses: robinraju/release-downloader@v1
+        with:
+          tag: ${{ github.event.inputs.tag }}
+          fileName: "Win-Optimizer-Pro_*_x64-setup.exe"
+          out-file-path: unsigned
+
+      - name: Upload unsigned artifact
+        id: upload-unsigned-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: unsigned/*.exe
+          if-no-files-found: error
+
+      - name: Submit signing request to SignPath
+        id: sign
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-artifact.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      # The updater .sig is a signature over the exact installer bytes, so it
+      # must be recomputed over the Authenticode-signed file.
+      - name: Re-sign updater signature
+        shell: bash
+        run: |
+          SIGNED="$(find signed -name '*.exe' | head -n1)"
+          echo "Signed installer: $SIGNED"
+          npx tauri signer sign \
+            --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
+            --file "$SIGNED" \
+            --output "${SIGNED}.sig"
+
+      - name: Upload signed installer back to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          files: |
+            signed/*.exe
+            signed/*.exe.sig

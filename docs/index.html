@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Win-Optimizer-Pro — Clean, debloat & tune Windows</title>
+    <meta
+      name="description"
+      content="Win-Optimizer-Pro is a modern, enterprise-grade Windows optimizer, cleaner & debloater built with Rust, React and PowerShell."
+    />
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --border: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --teal: #14b8a6;
+        --teal-dark: #0d9488;
+        --red: #f87171;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+      header {
+        padding: 72px 0 48px;
+        text-align: center;
+        background: radial-gradient(ellipse at top, #134e4a 0%, var(--bg) 60%);
+      }
+      header img { width: 96px; height: 96px; border-radius: 20px; }
+      header h1 { margin-top: 20px; font-size: 2.6rem; letter-spacing: -0.5px; }
+      header p { color: var(--muted); max-width: 640px; margin: 12px auto 28px; font-size: 1.1rem; }
+      .badges { margin-bottom: 28px; }
+      .badges a {
+        display: inline-block; margin: 4px; padding: 5px 12px; font-size: 0.8rem;
+        background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+        color: var(--text); text-decoration: none;
+      }
+      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+      .btn {
+        display: inline-block; padding: 12px 24px; border-radius: 10px; font-weight: 600;
+        text-decoration: none; font-size: 1rem;
+      }
+      .btn-primary { background: var(--teal); color: #042f2e; }
+      .btn-primary:hover { background: var(--teal-dark); color: #fff; }
+      .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+      .btn-ghost:hover { border-color: var(--teal); }
+      section { padding: 56px 0; }
+      section h2 { font-size: 1.7rem; margin-bottom: 16px; }
+      .features {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;
+      }
+      .feature {
+        background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+      }
+      .feature h3 { color: var(--teal); font-size: 1.05rem; margin-bottom: 6px; }
+      .feature p { color: var(--muted); font-size: 0.92rem; }
+      .screens {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;
+      }
+      .screens figure {
+        background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+      }
+      .screens img { width: 100%; display: block; }
+      .screens figcaption { padding: 10px 14px; color: var(--muted); font-size: 0.85rem; }
+      .install { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+      code {
+        display: block; background: #0b1120; border: 1px solid var(--border); border-radius: 8px;
+        padding: 14px 16px; color: #7dd3fc; font-family: Consolas, "Courier New", monospace;
+        font-size: 0.9rem; overflow-x: auto;
+      }
+      .warning {
+        margin-top: 16px; padding: 14px 16px; border: 1px solid #7f1d1d;
+        background: #450a0a33; border-radius: 10px; color: var(--red); font-size: 0.92rem;
+      }
+      footer {
+        border-top: 1px solid var(--border); padding: 32px 0 48px; text-align: center; color: var(--muted);
+        font-size: 0.85rem;
+      }
+      footer a { color: var(--teal); text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <img src="screenshots/icon.png" alt="Win-Optimizer-Pro logo" />
+        <h1>Win-Optimizer-Pro</h1>
+        <p>
+          A modern, enterprise-grade Windows optimizer, cleaner &amp; debloater —
+          powered by Rust, React and PowerShell.
+        </p>
+        <div class="badges">
+          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases">v2.1.4</a>
+          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/actions/workflows/ci.yml">CI passing</a>
+          <a href="#">Windows 10 · Windows 11</a>
+          <a href="https://v2.tauri.app">Built with Tauri v2</a>
+        </div>
+        <div class="cta">
+          <a class="btn btn-primary" href="#install">Download</a>
+          <a class="btn btn-ghost" href="https://github.com/karan5028ji/Win-Optimizer-Pro">View on GitHub</a>
+        </div>
+      </div>
+    </header>
+
+    <section>
+      <div class="wrap">
+        <h2>Why Win-Optimizer-Pro?</h2>
+        <p style="color: var(--muted); margin-bottom: 24px">
+          One flat, clean app that automates cleanup, debloating, tweaking and system
+          hardening — so you don&rsquo;t have to click through ten different settings apps.
+        </p>
+        <div class="features">
+          <div class="feature">
+            <h3>Deep Clean</h3>
+            <p>Blazing-fast temp, Windows Temp &amp; Prefetch cleanup via a native robocopy sweep — 20,000 files in ~13 seconds.</p>
+          </div>
+          <div class="feature">
+            <h3>Debloater</h3>
+            <p>Remove pre-installed bloat and unused apps in bulk, with an anti-brick preflight guard before anything changes.</p>
+          </div>
+          <div class="feature">
+            <h3>System Tweaks</h3>
+            <p>Context menus, startup items, privacy settings, DNS presets and power plans — applied instantly.</p>
+          </div>
+          <div class="feature">
+            <h3>Safety first</h3>
+            <p>Dry-run mode is ON by default. Create a System Restore point before debloating or applying tweaks.</p>
+          </div>
+          <div class="feature">
+            <h3>Reliable Stop</h3>
+            <p>Optimizer runs live inside a Windows Job Object that kills the whole process tree on close — Stop actually stops.</p>
+          </div>
+          <div class="feature">
+            <h3>Light &amp; dark mode</h3>
+            <p>A clean teal/slate interface that matches your theme, plus a live console with real-time progress.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <div class="wrap">
+        <h2>Screenshots</h2>
+        <div class="screens">
+          <figure><img src="screenshots/dashboard.png" alt="Dashboard" /><figcaption>Dashboard</figcaption></figure>
+          <figure><img src="screenshots/deep-clean.png" alt="Deep Clean" /><figcaption>Deep Clean</figcaption></figure>
+          <figure><img src="screenshots/install.png" alt="Install" /><figcaption>Install</figcaption></figure>
+          <figure><img src="screenshots/debloater.png" alt="Debloater" /><figcaption>Debloater</figcaption></figure>
+          <figure><img src="screenshots/system-tweaks.png" alt="System Tweaks" /><figcaption>System Tweaks</figcaption></figure>
+          <figure><img src="screenshots/tuning.png" alt="Tuning" /><figcaption>Tuning</figcaption></figure>
+          <figure><img src="screenshots/profiles.png" alt="Profiles" /><figcaption>Profiles</figcaption></figure>
+          <figure><img src="screenshots/dashboard-light.png" alt="Dashboard light mode" /><figcaption>Dashboard (light mode)</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="wrap">
+        <h2>Install</h2>
+        <div class="install">
+          <p style="margin-bottom: 12px; color: var(--muted)">
+            The fastest way — one line, straight from GitHub, no install needed:
+          </p>
+          <code>irm https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 | iex</code>
+          <p style="margin-top: 16px; color: var(--muted)">
+            Prefer a proper per-machine install with Start Menu + Desktop shortcuts?
+            Grab the installer from the
+            <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases" style="color: var(--teal)">Releases</a>
+            page.
+          </p>
+          <div class="warning">
+            ⚠️ This tool modifies your system — it removes apps, edits the registry and deletes files.
+            Dry-run mode is ON by default. Review the console output before applying anything.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <p>
+          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro">GitHub</a> ·
+          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases">Releases</a> ·
+          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/blob/main/LICENSE">MIT License</a>
+        </p>
+        <p style="margin-top: 8px">&copy; 2026 Win-Optimizer-Pro</p>
+      </div>
+    </footer>
+  </body>
+</html>

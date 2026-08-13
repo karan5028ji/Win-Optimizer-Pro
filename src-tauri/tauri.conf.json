@@ -30,6 +30,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -42,6 +43,14 @@
       "nsis": {
         "installMode": "perMachine"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDczMTRFMERGRjU1MUVGMDAKUldRQTcxSDEzK0FVYy85amQwU2VrR012WHBtbEdVZW1Wa01vZ01QWkFKbEtMNWxQUE5wR3A2TE4K",
+      "endpoints": [
+        "https://github.com/karan5028ji/Win-Optimizer-Pro/releases/latest/download/latest.json"
+      ]
     }
   }
 }
