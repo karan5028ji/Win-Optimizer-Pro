@@ -138,7 +138,7 @@ npm run tauri build
 
 Output:
 
-- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.3_x64-setup.exe`
+- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.4_x64-setup.exe`
 - Binary: `src-tauri\target\release\win-optimizer-pro.exe`
 
 **Requirements:** Node.js 18+, Rust stable (MSVC toolchain), WebView2 (bundled with Windows 11 / modern Windows 10).
