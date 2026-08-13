@@ -179,6 +179,11 @@ This project is provided **as-is**, without warranty of any kind. Running the ap
 
 Issues, ideas and PRs are welcome. Open an issue to report bugs or request tweaks/categories before submitting large changes.
 
+## 👥 Contributors
+
+- [@karan5028ji](https://github.com/karan5028ji) — author & maintainer
+- [@ankit-is-a-dev](https://github.com/ankit-is-a-dev) — testing, feedback & documentation
+
 ## 📄 License
 
 MIT
