@@ -38,3 +38,5 @@ jobs:
 
       - name: Verify release bundle builds
         run: npm run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
