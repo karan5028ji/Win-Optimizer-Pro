@@ -107,7 +107,7 @@ export default function Console({ running, progress, onCancel }) {
           ref={bodyRef}
           className="h-full overflow-y-auto border-t border-slate-200 bg-slate-50 px-4 py-3 font-mono text-[12px] leading-relaxed text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
         >
-          {logs.length === 0 ? "Waiting for output…\n" : logs.join("")}
+          {logs.length === 0 ? "Waiting for output…\n" : logs.slice(-300).join("")}
         </pre>
       </div>
     </section>

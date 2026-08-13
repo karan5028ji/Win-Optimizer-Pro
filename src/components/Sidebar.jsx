@@ -30,7 +30,7 @@ export default function Sidebar({ tab, onTab, running }) {
         </div>
         <div>
           <p className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            PC Optimizer
+            Win-Optimizer-Pro
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">Power-user suite</p>
         </div>
@@ -59,7 +59,7 @@ export default function Sidebar({ tab, onTab, running }) {
 
       <div className="mt-auto px-5 py-4">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-          <p className="font-semibold text-slate-700 dark:text-slate-300">v2.1.3</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-300">v2.1.4</p>
           <p className="mt-0.5">
             {running ? "Operation running…" : "Idle · waiting for input"}
           </p>

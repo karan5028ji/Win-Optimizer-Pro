@@ -225,7 +225,8 @@ export default function App() {
 
   const cancel = useCallback(() => {
     stopOptimizer().catch(() => {});
-  }, []);
+    toast("Stopping…", "info");
+  }, [toast]);
 
   const restartAsAdmin = useCallback(() => {
     relaunchElevated().catch(() => toast("Could not relaunch elevated.", "error"));

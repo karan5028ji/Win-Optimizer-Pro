@@ -71,6 +71,7 @@ export default function Profiles() {
   const [selPower, setSelPower] = useState("");
   const [selMode, setSelMode] = useState("");
   const [profileName, setProfileName] = useState("my-profile");
+  const [includeSsh, setIncludeSsh] = useState(false);
 
   const load = useCallback(async () => {
     getConfigs().then(setConfigs).catch(() => {});
@@ -109,6 +110,7 @@ export default function Profiles() {
     if (selDns) args.push("-Dns", selDns);
     if (selPower) args.push("-Power", selPower);
     if (selMode) args.push("-UpdateMode", selMode);
+    if (includeSsh) args.push("-Ssh");
     run(args);
     toast("Profile exported. See console for the file path.", "info");
   };
@@ -265,6 +267,13 @@ export default function Profiles() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="mb-3">
+            <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1">
+              <input type="checkbox" checked={includeSsh} onChange={(e) => setIncludeSsh(e.target.checked)} className="accent-teal-600" />
+              <span className="text-xs text-slate-700 dark:text-slate-300">Enable OpenSSH server on this machine</span>
+            </label>
           </div>
 
           <button onClick={doExport} disabled={running || !profileName.trim()} className="btn-primary mt-4 w-full">

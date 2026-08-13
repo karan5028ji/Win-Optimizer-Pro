@@ -1,4 +1,4 @@
-# optimizer.ps1 - CLI entry point for the PC Optimizer
+# optimizer.ps1 - CLI entry point for Win-Optimizer-Pro
 #
 # Usage:
 #   .\optimizer.ps1 -Clean                # temp + browser cache + DNS flush
@@ -138,6 +138,7 @@ param(
     # --- Context menu + startup ---
     [ValidateSet('Classic', 'Default')]
     [string]$SetContextMenu = $null,
+    [switch]$ContextMenuState,
     [switch]$ListStartup,
     [string]$SetStartup = $null,
     [switch]$EnableStartup,
@@ -183,7 +184,7 @@ Set-OptimizerLogFile -Path $logPath
 function Show-Usage {
     @"
 
-PC Optimizer - CLI
+Win-Optimizer-Pro - CLI
   .\optimizer.ps1 -Clean | -Network | -Debloat | -Tweaks | -All
   -Category Bing,Xbox   filter bloatware categories
   -Package X            remove one specific package
@@ -205,7 +206,7 @@ $isAdmin = Test-IsAdmin
 if ($isAdmin) {
     Write-Log "[+] Running with administrator rights."
 }
-elseif ($DryRun -or $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $WingetList -or $ListDNS -or $ListUpdateModes -or $ListPower -or $ListFeatures -or $ListFixes -or $ListPanels -or $ListConfigs -or $ListStartup -or $Preflight -or $ExportConfig) {
+elseif ($DryRun -or $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $WingetList -or $ListDNS -or $ListUpdateModes -or $ListPower -or $ListFeatures -or $ListFixes -or $ListPanels -or $ListConfigs -or $ListStartup -or $ContextMenuState -or $Preflight -or $ExportConfig) {
     Write-Log "[dry-run] Read-only preview (non-admin)."
 }
 elseif ($NoElevate) {
@@ -421,6 +422,7 @@ if ($ImportConfig) { Import-OptimizerConfig -Path $ConfigPath -Name $ConfigName 
 
 # --- Context menu + startup ---
 if ($SetContextMenu) { Set-ContextMenuStyle -Style $SetContextMenu -DryRun:$DryRun }
+if ($ContextMenuState) { Get-ContextMenuState }
 if ($ListStartup) { Get-StartupItems }
 if ($SetStartup) {
     if ($EnableStartup) { Set-StartupItem -Item $SetStartup -Enable -DryRun:$DryRun }
@@ -432,7 +434,7 @@ if ($SetStartup) {
 if ($Preflight) { Test-Preflight -Action $Preflight | Out-Null }
 
 # --- Summary ----------------------------------------------------------------
-$ranAnything = $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $Restore -or $Network -or $Clean -or $Debloat -or $Tweaks -or $UndoTweaks -or $All -or $UserTemp -or $WindowsTemp -or $Prefetch -or $FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet -or $WingetList -or $WingetInstall -or $WingetUpgrade -or $WingetUpgradeAll -or $WingetUninstall -or $ListDNS -or $SetDNS -or $ListUpdateModes -or $SetUpdateMode -or $ListPower -or $SetPower -or $ListFeatures -or $SetFeature -or $ListFixes -or $RunFix -or $ListPanels -or $OpenPanel -or $EnableSsh -or $DisableSsh -or $CreateWin11Iso -or $Profile -or $ExportConfig -or $ListConfigs -or $ImportConfig -or $SetContextMenu -or $ListStartup -or $SetStartup -or $Preflight
+$ranAnything = $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $Restore -or $Network -or $Clean -or $Debloat -or $Tweaks -or $UndoTweaks -or $All -or $UserTemp -or $WindowsTemp -or $Prefetch -or $FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet -or $WingetList -or $WingetInstall -or $WingetUpgrade -or $WingetUpgradeAll -or $WingetUninstall -or $ListDNS -or $SetDNS -or $ListUpdateModes -or $SetUpdateMode -or $ListPower -or $SetPower -or $ListFeatures -or $SetFeature -or $ListFixes -or $RunFix -or $ListPanels -or $OpenPanel -or $EnableSsh -or $DisableSsh -or $CreateWin11Iso -or $Profile -or $ExportConfig -or $ListConfigs -or $ImportConfig -or $SetContextMenu -or $ContextMenuState -or $ListStartup -or $SetStartup -or $Preflight
 if (-not $ranAnything) {
     Show-Usage
 }

@@ -173,6 +173,12 @@ export const getStartupItems = async () => {
     .filter(Boolean);
 };
 
+export const getContextMenuState = async () => {
+  const raw = await invoke("get_context_menu");
+  const line = raw.split("\n").find((l) => l.startsWith("CTXMENU|classic|"));
+  return line ? /true$/i.test(line.trim()) : false;
+};
+
 export const getConfigs = async () => {
   const raw = await invoke("get_configs");
   return raw
@@ -188,7 +194,7 @@ export const getTweakRegistryInfo = async () => {
   const raw = await invoke("get_tweak_registry_info");
   const map = {};
   for (const line of raw.split("\n")) {
-    const m = line.match(/TWEETINFO\|([^|]+)\|(.+)/);
+    const m = line.match(/TWEAKINFO\|([^|]+)\|(.+)/);
     if (m) map[m[1]] = m[2].trim();
   }
   return map;
