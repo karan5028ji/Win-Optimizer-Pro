@@ -892,9 +892,19 @@ mod tests {
         let _ = supervisor.join();
 
         assert!(fired, "optimizer:done must fire despite a grandchild holding the stdout pipe");
-        assert!(
-            !logs.lock().unwrap().is_empty(),
-            "parent output should still be captured"
-        );
+        // The stdout reader thread is detached (not joined by supervise_run, since
+        // the grandchild keeps the pipe open). On a busy CI runner it may not get
+        // scheduled the instant `done` fires, so poll instead of asserting once.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let captured = loop {
+            if !logs.lock().unwrap().is_empty() {
+                break true;
+            }
+            if Instant::now() >= deadline {
+                break false;
+            }
+            thread::sleep(Duration::from_millis(100));
+        };
+        assert!(captured, "parent output should still be captured");
     }
 }
