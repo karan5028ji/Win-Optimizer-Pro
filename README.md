@@ -25,6 +25,24 @@ Win-Optimizer-Pro is a **flat, enterprise-style desktop app** that automates cle
 
 Designed for **Windows 10 / Windows 11**.
 
+## 🖼 Screenshots
+
+| Dashboard | Deep Clean |
+| --- | --- |
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Deep Clean](docs/screenshots/deep-clean.png) |
+
+| Install | Debloater |
+| --- | --- |
+| ![Install](docs/screenshots/install.png) | ![Debloater](docs/screenshots/debloater.png) |
+
+| System Tweaks | Tuning |
+| --- | --- |
+| ![System Tweaks](docs/screenshots/system-tweaks.png) | ![Tuning](docs/screenshots/tuning.png) |
+
+| Profiles | Light mode |
+| --- | --- |
+| ![Profiles](docs/screenshots/profiles.png) | ![Dashboard light mode](docs/screenshots/dashboard-light.png) |
+
 ## 🚀 Quick Install
 
 The fastest way — one line, straight from GitHub, no install needed:
