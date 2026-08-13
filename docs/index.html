@@ -3,197 +3,556 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Win-Optimizer-Pro — Clean, debloat & tune Windows</title>
+    <title>Win-Optimizer-Pro — Clean, debloat &amp; tune Windows</title>
     <meta
       name="description"
-      content="Win-Optimizer-Pro is a modern, enterprise-grade Windows optimizer, cleaner & debloater built with Rust, React and PowerShell."
+      content="Win-Optimizer-Pro. A fast, private, open-source way to clean, debloat and tune Windows — built with Rust, React and PowerShell."
     />
+    <link rel="icon" type="image/png" href="screenshots/icon.png" />
     <style>
       :root {
-        --bg: #0f172a;
-        --panel: #1e293b;
-        --border: #334155;
-        --text: #e2e8f0;
-        --muted: #94a3b8;
-        --teal: #14b8a6;
-        --teal-dark: #0d9488;
-        --red: #f87171;
+        --bg: #ffffff;
+        --bg-soft: #f5f5f7;
+        --ink: #1d1d1f;
+        --ink-2: #424245;
+        --muted: #6e6e73;
+        --hairline: rgba(0, 0, 0, 0.08);
+        --accent: #0071e3;
+        --accent-dark: #0060c9;
+        --accent-soft: #e8f1fb;
+        --radius-lg: 22px;
+        --radius-md: 14px;
+        --shadow-1: 0 8px 30px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 24px 80px rgba(0, 0, 0, 0.16);
+        --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
       }
+
       * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        * { transition: none !important; animation: none !important; }
+      }
+
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         background: var(--bg);
-        color: var(--text);
-        line-height: 1.6;
+        color: var(--ink);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        overflow-x: hidden;
       }
-      .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
-      header {
-        padding: 72px 0 48px;
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+      .code-block { overflow-x: auto; max-width: 100%; }
+
+      ::selection { background: var(--accent-soft); color: var(--ink); }
+
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      /* ---------- Nav ---------- */
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        background: rgba(255, 255, 255, 0.72);
+        border-bottom: 1px solid var(--hairline);
+      }
+      .nav-inner {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--ink); }
+      .brand img { width: 22px; height: 22px; border-radius: 6px; }
+      .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+      .nav-links a { color: var(--ink-2); font-size: 0.86rem; font-weight: 500; }
+      .nav-links a:hover { color: var(--ink); text-decoration: none; }
+      .nav-cta {
+        font-size: 0.86rem;
+        font-weight: 500;
+        color: #fff;
+        background: var(--accent);
+        padding: 6px 16px;
+        border-radius: 980px;
+        transition: background 0.25s var(--ease);
+      }
+      .nav-cta:hover { background: var(--accent-dark); color: #fff; text-decoration: none; }
+      @media (max-width: 720px) {
+        .nav-links { display: none; }
+      }
+
+      /* ---------- Layout helpers ---------- */
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+      section { position: relative; }
+      .section-label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 12px;
+      }
+      .section-title { font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+      .section-sub { color: var(--muted); font-size: 1.15rem; max-width: 620px; margin-top: 14px; }
+
+      /* ---------- Hero ---------- */
+      .hero {
         text-align: center;
-        background: radial-gradient(ellipse at top, #134e4a 0%, var(--bg) 60%);
+        padding: 120px 24px 0;
+        background:
+          radial-gradient(1200px 480px at 50% -140px, var(--accent-soft), transparent 70%),
+          var(--bg);
       }
-      header img { width: 96px; height: 96px; border-radius: 20px; }
-      header h1 { margin-top: 20px; font-size: 2.6rem; letter-spacing: -0.5px; }
-      header p { color: var(--muted); max-width: 640px; margin: 12px auto 28px; font-size: 1.1rem; }
-      .badges { margin-bottom: 28px; }
-      .badges a {
-        display: inline-block; margin: 4px; padding: 5px 12px; font-size: 0.8rem;
-        background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
-        color: var(--text); text-decoration: none;
-      }
-      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-      .btn {
-        display: inline-block; padding: 12px 24px; border-radius: 10px; font-weight: 600;
-        text-decoration: none; font-size: 1rem;
-      }
-      .btn-primary { background: var(--teal); color: #042f2e; }
-      .btn-primary:hover { background: var(--teal-dark); color: #fff; }
-      .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-      .btn-ghost:hover { border-color: var(--teal); }
-      section { padding: 56px 0; }
-      section h2 { font-size: 1.7rem; margin-bottom: 16px; }
-      .features {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;
-      }
-      .feature {
-        background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
-      }
-      .feature h3 { color: var(--teal); font-size: 1.05rem; margin-bottom: 6px; }
-      .feature p { color: var(--muted); font-size: 0.92rem; }
-      .screens {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;
-      }
-      .screens figure {
-        background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
-      }
-      .screens img { width: 100%; display: block; }
-      .screens figcaption { padding: 10px 14px; color: var(--muted); font-size: 0.85rem; }
-      .install { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-      code {
-        display: block; background: #0b1120; border: 1px solid var(--border); border-radius: 8px;
-        padding: 14px 16px; color: #7dd3fc; font-family: Consolas, "Courier New", monospace;
-        font-size: 0.9rem; overflow-x: auto;
-      }
-      .warning {
-        margin-top: 16px; padding: 14px 16px; border: 1px solid #7f1d1d;
-        background: #450a0a33; border-radius: 10px; color: var(--red); font-size: 0.92rem;
-      }
-      footer {
-        border-top: 1px solid var(--border); padding: 32px 0 48px; text-align: center; color: var(--muted);
+      .hero .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--ink-2);
+        background: var(--bg-soft);
+        border: 1px solid var(--hairline);
+        border-radius: 980px;
+        padding: 8px 18px;
+        margin-bottom: 28px;
       }
-      footer a { color: var(--teal); text-decoration: none; }
+      .hero .eyebrow .dot { width: 8px; height: 8px; border-radius: 50%; background: #34c759; }
+      .hero h1 {
+        font-size: clamp(2.9rem, 7vw, 5.2rem);
+        font-weight: 700;
+        letter-spacing: -0.035em;
+        line-height: 1.04;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      .hero h1 em { font-style: normal; background: linear-gradient(120deg, var(--accent), #5ac8fa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .hero .sub {
+        font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+        color: var(--ink-2);
+        max-width: 640px;
+        margin: 22px auto 0;
+      }
+      .hero .cta-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 36px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 30px;
+        border-radius: 980px;
+        font-size: 1.02rem;
+        font-weight: 500;
+        transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease);
+      }
+      .btn:hover { text-decoration: none; transform: translateY(-1px); }
+      .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 24px rgba(0, 113, 227, 0.28); }
+      .btn-primary:hover { background: var(--accent-dark); }
+      .btn-secondary {
+        background: var(--bg-soft);
+        color: var(--ink);
+        border: 1px solid var(--hairline);
+      }
+      .btn-secondary:hover { background: #ececf0; }
+      .hero .meta { margin-top: 20px; font-size: 0.85rem; color: var(--muted); }
+      .hero .meta code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; background: var(--bg-soft); padding: 2px 7px; border-radius: 6px; }
+
+      .hero-stage { position: relative; margin: 64px auto 0; max-width: 1080px; padding: 0 24px 80px; }
+      .hero-stage .glow {
+        position: absolute;
+        inset: -12% 5% 20%;
+        background: radial-gradient(60% 55% at 50% 38%, rgba(0, 113, 227, 0.14), transparent 70%);
+        filter: blur(30px);
+        z-index: 0;
+        pointer-events: none;
+      }
+      .hero-shot {
+        position: relative;
+        z-index: 1;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-2);
+        border: 1px solid var(--hairline);
+        overflow: hidden;
+        background: var(--bg-soft);
+        animation: rise 1.1s var(--ease) both;
+        transform: translateZ(0);
+      }
+      .hero-shot img { width: 100%; display: block; }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(28px) scale(0.985); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      /* ---------- Logo strip ---------- */
+      .strip {
+        border-top: 1px solid var(--hairline);
+        border-bottom: 1px solid var(--hairline);
+        background: var(--bg-soft);
+        padding: 22px 0;
+      }
+      .strip ul {
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 16px 44px;
+        color: var(--muted);
+        font-size: 0.88rem;
+        font-weight: 500;
+      }
+      .strip li { display: inline-flex; align-items: center; gap: 8px; }
+      .strip svg { width: 16px; height: 16px; opacity: 0.7; }
+
+      /* ---------- Showcase ---------- */
+      .showcase { padding: 110px 0 40px; }
+      .showcase-row {
+        display: grid;
+        grid-template-columns: 1.05fr 1fr;
+        align-items: center;
+        gap: 64px;
+        margin-bottom: 120px;
+      }
+      .showcase-row.flip .shot { order: 2; }
+      .showcase-row .copy h3 { font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+      .showcase-row .copy p { color: var(--ink-2); margin-top: 14px; font-size: 1.05rem; }
+      .showcase-row .copy .kicker { color: var(--accent); font-size: 0.82rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+      .shot {
+        position: relative;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-1);
+        border: 1px solid var(--hairline);
+        overflow: hidden;
+        transition: transform 0.5s var(--ease), box-shadow 0.5s var(--ease);
+        will-change: transform;
+      }
+      .shot:hover { transform: translateY(-6px) scale(1.012); box-shadow: var(--shadow-2); }
+      .shot img { width: 100%; display: block; }
+      @media (max-width: 860px) {
+        .showcase-row, .showcase-row.flip { grid-template-columns: 1fr; gap: 32px; margin-bottom: 80px; }
+        .showcase-row.flip .shot { order: 0; }
+        .install-grid { grid-template-columns: 1fr; }
+      }
+
+      /* ---------- Features ---------- */
+      .features { padding: 96px 0; background: var(--bg-soft); border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+      .features .head { text-align: center; margin-bottom: 64px; }
+      .features .head .section-sub { margin-left: auto; margin-right: auto; }
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-md);
+        padding: 30px 28px;
+        transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease), border-color 0.35s var(--ease);
+      }
+      .card:hover { transform: translateY(-4px); box-shadow: var(--shadow-1); border-color: rgba(0, 113, 227, 0.25); }
+      .card .icon {
+        width: 44px; height: 44px;
+        display: grid; place-items: center;
+        border-radius: 12px;
+        background: var(--accent-soft);
+        margin-bottom: 18px;
+      }
+      .card .icon svg { width: 22px; height: 22px; stroke: var(--accent); }
+      .card h4 { font-size: 1.08rem; font-weight: 650; margin-bottom: 8px; }
+      .card p { color: var(--muted); font-size: 0.93rem; }
+
+      /* ---------- Install ---------- */
+      .install { padding: 120px 0; }
+      .install .head { text-align: center; margin-bottom: 56px; }
+      .install .head .section-sub { margin-left: auto; margin-right: auto; }
+      .install-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+      .panel {
+        background: var(--bg-soft);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-md);
+        padding: 30px;
+      }
+      .panel h4 { font-size: 1.05rem; font-weight: 650; margin-bottom: 6px; }
+      .panel p { color: var(--muted); font-size: 0.93rem; }
+      .code-block {
+        margin-top: 18px;
+        background: #1d1d1f;
+        color: #f5f5f7;
+        border-radius: 12px;
+        padding: 16px 18px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.86rem;
+        line-height: 1.6;
+        overflow-x: auto;
+        white-space: nowrap;
+        position: relative;
+      }
+      .code-block .prompt { color: #7d7d85; user-select: none; }
+      .code-block .cmd { color: #0af; }
+      .panel .btn { margin-top: 22px; }
+      .install .note { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 36px; }
+      .install .note a { color: var(--accent); }
+
+      /* ---------- CTA band ---------- */
+      .cta-band { background: linear-gradient(180deg, var(--bg-soft), #fff); padding: 110px 24px; text-align: center; }
+      .cta-band h2 { font-size: clamp(2rem, 4.5vw, 3rem); font-weight: 700; letter-spacing: -0.025em; }
+      .cta-band p { color: var(--muted); font-size: 1.15rem; margin: 16px auto 34px; max-width: 480px; }
+
+      /* ---------- Footer ---------- */
+      footer { border-top: 1px solid var(--hairline); background: var(--bg-soft); padding: 44px 0 60px; }
+      footer .inner { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+      footer .links { display: flex; gap: 28px; font-size: 0.85rem; }
+      footer .links a { color: var(--muted); }
+      footer .links a:hover { color: var(--ink); text-decoration: none; }
+      footer .legal { color: var(--muted); font-size: 0.78rem; text-align: center; line-height: 1.7; }
+      footer .legal a { color: var(--muted); text-decoration: underline; }
+
+      /* ---------- Scroll reveal ---------- */
+      .reveal { opacity: 0; transform: translateY(26px); transition: opacity 0.7s var(--ease), transform 0.7s var(--ease); }
+      .reveal.in { opacity: 1; transform: translateY(0); }
+      @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; } }
     </style>
   </head>
   <body>
-    <header>
+    <nav>
+      <div class="nav-inner">
+        <a class="brand" href="#top">
+          <img src="screenshots/icon.png" alt="" />
+          Win-Optimizer-Pro
+        </a>
+        <ul class="nav-links">
+          <li><a href="#product">Product</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#install">Install</a></li>
+          <li><a href="https://github.com/karan5028ji/Win-Optimizer-Pro">GitHub</a></li>
+          <li><a class="nav-cta" href="#install">Download</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <header class="hero" id="top">
       <div class="wrap">
-        <img src="screenshots/icon.png" alt="Win-Optimizer-Pro logo" />
-        <h1>Win-Optimizer-Pro</h1>
-        <p>
-          A modern, enterprise-grade Windows optimizer, cleaner &amp; debloater —
-          powered by Rust, React and PowerShell.
+        <div class="eyebrow"><span class="dot"></span> v2.1.4 · now with reliable Stop &amp; auto-updates</div>
+        <h1>Clean. Debloat. <em>Tune.</em><br />Your PC, freed.</h1>
+        <p class="sub">
+          One fast, private, open-source app that clears the junk, removes the bloat and
+          unlocks real performance — so Windows feels like it should.
         </p>
-        <div class="badges">
-          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases">v2.1.4</a>
-          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/actions/workflows/ci.yml">CI passing</a>
-          <a href="#">Windows 10 · Windows 11</a>
-          <a href="https://v2.tauri.app">Built with Tauri v2</a>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">Download for Windows</a>
+          <a class="btn btn-secondary" href="https://github.com/karan5028ji/Win-Optimizer-Pro">
+            View on GitHub
+          </a>
         </div>
-        <div class="cta">
-          <a class="btn btn-primary" href="#install">Download</a>
-          <a class="btn btn-ghost" href="https://github.com/karan5028ji/Win-Optimizer-Pro">View on GitHub</a>
+        <p class="meta">
+          Free &amp; open source · <code>irm …run.ps1 | iex</code> · <code>winget install karan5028ji.WinOptimizerPro</code>
+        </p>
+      </div>
+      <div class="hero-stage">
+        <div class="glow"></div>
+        <div class="hero-shot">
+          <img src="screenshots/dashboard.png" alt="Win-Optimizer-Pro dashboard" width="1912" height="901" fetchpriority="high" />
         </div>
       </div>
     </header>
 
-    <section>
+    <div class="strip" aria-hidden="true">
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Blazing fast native cleanup</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Safety-first, dry-run by default</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-9-9"/><path d="M21 3v6h-6"/></svg> Built with Rust &amp; Tauri</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> 100% open source</li>
+      </ul>
+    </div>
+
+    <section class="showcase" id="product">
       <div class="wrap">
-        <h2>Why Win-Optimizer-Pro?</h2>
-        <p style="color: var(--muted); margin-bottom: 24px">
-          One flat, clean app that automates cleanup, debloating, tweaking and system
-          hardening — so you don&rsquo;t have to click through ten different settings apps.
+        <div class="reveal">
+          <div class="section-label">Product</div>
+          <h2 class="section-title">Every setting your PC needs.<br />One clean place.</h2>
+        </div>
+
+        <div class="showcase-row reveal">
+          <div class="copy">
+            <div class="kicker">Deep Clean</div>
+            <h3>Clear gigabytes in seconds.</h3>
+            <p>
+              A native robocopy sweep clears temp files, Windows Temp and Prefetch at
+              incredible speed — tens of thousands of files in about thirteen seconds.
+            </p>
+          </div>
+          <div class="shot"><img src="screenshots/deep-clean.png" alt="Deep Clean screen" loading="lazy" width="1912" height="901" /></div>
+        </div>
+
+        <div class="showcase-row flip reveal">
+          <div class="copy">
+            <div class="kicker">Debloater</div>
+            <h3>Uninstall the junk Windows ships with.</h3>
+            <p>
+              Remove pre-installed bloat in bulk, backed by an anti-brick preflight guard
+              that checks the system before anything changes.
+            </p>
+          </div>
+          <div class="shot"><img src="screenshots/debloater.png" alt="Debloater screen" loading="lazy" width="1912" height="901" /></div>
+        </div>
+
+        <div class="showcase-row reveal">
+          <div class="copy">
+            <div class="kicker">System Tweaks</div>
+            <h3>Instantly. No digging through Settings.</h3>
+            <p>
+              Context menus, startup items, privacy settings, DNS presets and power plans —
+              applied with one click, no ten different control panels.
+            </p>
+          </div>
+          <div class="shot"><img src="screenshots/system-tweaks.png" alt="System Tweaks screen" loading="lazy" width="1912" height="901" /></div>
+        </div>
+
+        <div class="showcase-row flip reveal">
+          <div class="copy">
+            <div class="kicker">Tuning &amp; Profiles</div>
+            <h3>Performance that follows your workflow.</h3>
+            <p>
+              Fine-tune responsiveness and switch profiles to match how you work, with a
+              live console showing every step in real time.
+            </p>
+          </div>
+          <div class="shot"><img src="screenshots/tuning.png" alt="Tuning screen" loading="lazy" width="1912" height="901" /></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <div class="wrap">
+        <div class="head reveal">
+          <div class="section-label">Features</div>
+          <h2 class="section-title">Thoughtful by design.</h2>
+          <p class="section-sub">
+            Fast enough to feel native. Careful enough to feel safe.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <div class="card reveal">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+            <h4>Deep Clean</h4>
+            <p>Temp, Windows Temp &amp; Prefetch cleared by a native sweep — fast enough that you won’t even finish your coffee.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></div>
+            <h4>Debloater</h4>
+            <p>Remove pre-installed bloat and unused apps in bulk, with an anti-brick preflight guard first.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+            <h4>System Tweaks</h4>
+            <p>Context menus, startup items, privacy, DNS presets and power plans — one click, instantly.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <h4>Safety first</h4>
+            <p>Dry-run mode is on by default, with System Restore points created before anything is applied.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg></div>
+            <h4>Reliable Stop</h4>
+            <p>Work runs inside a Windows Job Object that kills the whole tree on close — Stop actually stops.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></div>
+            <h4>Light &amp; dark mode</h4>
+            <p>A clean interface that follows your theme, with a live console showing real-time progress.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="install" id="install">
+      <div class="wrap">
+        <div class="head reveal">
+          <div class="section-label">Install</div>
+          <h2 class="section-title">Up and running in one line.</h2>
+          <p class="section-sub">
+            No account, no installers full of bloat. Download the installer or run the portable one-liner.
+          </p>
+        </div>
+        <div class="install-grid">
+          <div class="panel reveal">
+            <h4>Portable — one line</h4>
+            <p>Runs straight from GitHub, nothing installed to your system.</p>
+            <div class="code-block"><span class="prompt">PS&gt;</span> <span class="cmd">irm</span> https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 <span class="cmd">|</span> iex</div>
+            <a class="btn btn-secondary" href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases/latest">Download portable</a>
+          </div>
+          <div class="panel reveal">
+            <h4>Full installer</h4>
+            <p>Per-machine install with Start Menu &amp; Desktop shortcuts, plus automatic updates.</p>
+            <div class="code-block"><span class="prompt">PS&gt;</span> <span class="cmd">winget</span> install karan5028ji.WinOptimizerPro</div>
+            <a class="btn btn-primary" href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases/latest">Download installer</a>
+          </div>
+        </div>
+        <p class="note">
+          Release installers are code-signed by the <a href="https://signpath.org/foundation">SignPath Foundation</a>.
         </p>
-        <div class="features">
-          <div class="feature">
-            <h3>Deep Clean</h3>
-            <p>Blazing-fast temp, Windows Temp &amp; Prefetch cleanup via a native robocopy sweep — 20,000 files in ~13 seconds.</p>
-          </div>
-          <div class="feature">
-            <h3>Debloater</h3>
-            <p>Remove pre-installed bloat and unused apps in bulk, with an anti-brick preflight guard before anything changes.</p>
-          </div>
-          <div class="feature">
-            <h3>System Tweaks</h3>
-            <p>Context menus, startup items, privacy settings, DNS presets and power plans — applied instantly.</p>
-          </div>
-          <div class="feature">
-            <h3>Safety first</h3>
-            <p>Dry-run mode is ON by default. Create a System Restore point before debloating or applying tweaks.</p>
-          </div>
-          <div class="feature">
-            <h3>Reliable Stop</h3>
-            <p>Optimizer runs live inside a Windows Job Object that kills the whole process tree on close — Stop actually stops.</p>
-          </div>
-          <div class="feature">
-            <h3>Light &amp; dark mode</h3>
-            <p>A clean teal/slate interface that matches your theme, plus a live console with real-time progress.</p>
-          </div>
-        </div>
       </div>
     </section>
 
-    <section id="screenshots">
-      <div class="wrap">
-        <h2>Screenshots</h2>
-        <div class="screens">
-          <figure><img src="screenshots/dashboard.png" alt="Dashboard" /><figcaption>Dashboard</figcaption></figure>
-          <figure><img src="screenshots/deep-clean.png" alt="Deep Clean" /><figcaption>Deep Clean</figcaption></figure>
-          <figure><img src="screenshots/install.png" alt="Install" /><figcaption>Install</figcaption></figure>
-          <figure><img src="screenshots/debloater.png" alt="Debloater" /><figcaption>Debloater</figcaption></figure>
-          <figure><img src="screenshots/system-tweaks.png" alt="System Tweaks" /><figcaption>System Tweaks</figcaption></figure>
-          <figure><img src="screenshots/tuning.png" alt="Tuning" /><figcaption>Tuning</figcaption></figure>
-          <figure><img src="screenshots/profiles.png" alt="Profiles" /><figcaption>Profiles</figcaption></figure>
-          <figure><img src="screenshots/dashboard-light.png" alt="Dashboard light mode" /><figcaption>Dashboard (light mode)</figcaption></figure>
-        </div>
-      </div>
-    </section>
-
-    <section id="install">
-      <div class="wrap">
-        <h2>Install</h2>
-        <div class="install">
-          <p style="margin-bottom: 12px; color: var(--muted)">
-            The fastest way — one line, straight from GitHub, no install needed:
-          </p>
-          <code>irm https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 | iex</code>
-          <p style="margin-top: 16px; color: var(--muted)">
-            Prefer a proper per-machine install with Start Menu + Desktop shortcuts?
-            Grab the installer from the
-            <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases" style="color: var(--teal)">Releases</a>
-            page.
-          </p>
-          <p style="margin-top: 16px; color: var(--muted)">
-            Release installers are code-signed by the
-            <a href="https://signpath.org/foundation" style="color: var(--teal)">SignPath Foundation</a>.
-          </p>
-          <div class="warning">
-            ⚠️ This tool modifies your system — it removes apps, edits the registry and deletes files.
-            Dry-run mode is ON by default. Review the console output before applying anything.
-          </div>
-        </div>
+    <section class="cta-band">
+      <div class="reveal">
+        <h2>Give your PC back its speed.</h2>
+        <p>Free. Open source. Ready when you are.</p>
+        <a class="btn btn-primary" href="#install">Get Win-Optimizer-Pro</a>
       </div>
     </section>
 
     <footer>
-      <div class="wrap">
-        <p>
-          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro">GitHub</a> ·
-          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases">Releases</a> ·
+      <div class="wrap inner">
+        <div class="links">
+          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro">GitHub</a>
+          <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/releases">Releases</a>
           <a href="https://github.com/karan5028ji/Win-Optimizer-Pro/blob/main/LICENSE">MIT License</a>
+        </div>
+        <p class="legal">
+          © 2026 Win-Optimizer-Pro. Crafted with Rust, React &amp; PowerShell. ·
+          <a href="https://signpath.org/foundation">Code signing by SignPath Foundation</a>.
         </p>
-        <p style="margin-top: 8px">&copy; 2026 Win-Optimizer-Pro</p>
       </div>
     </footer>
+
+    <script>
+      (function () {
+        var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (!reduce && "IntersectionObserver" in window) {
+          var targets = document.querySelectorAll(".reveal");
+          var io = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add("in");
+                  io.unobserve(entry.target);
+                }
+              });
+            },
+            { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+          );
+          targets.forEach(function (el) { io.observe(el); });
+        } else {
+          document.querySelectorAll(".reveal").forEach(function (el) { el.classList.add("in"); });
+        }
+      })();
+    </script>
   </body>
 </html>
