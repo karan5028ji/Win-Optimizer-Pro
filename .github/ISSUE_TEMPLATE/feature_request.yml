@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest an idea or improvement for Win-Optimizer-Pro
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! Please describe the feature and the problem it solves.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that the app can't do today?
+      placeholder: |
+        I want to be able to ...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should the feature work? Describe the UI / behavior you imagine.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Cleanup / temp
+        - Debloater
+        - System tweaks
+        - Tuning
+        - Profiles
+        - Startup manager
+        - Dashboard
+        - General / other
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Any workarounds or alternative approaches you considered?

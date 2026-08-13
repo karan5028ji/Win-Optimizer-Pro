@@ -7,6 +7,7 @@
 **A modern, enterprise-grade Windows optimizer, cleaner & debloater — powered by Rust, React and PowerShell.**
 
 [![Version](https://img.shields.io/badge/version-2.1.4-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
+[![CI](https://github.com/karan5028ji/Win-Optimizer-Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/karan5028ji/Win-Optimizer-Pro/actions)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)](https://www.microsoft.com/windows)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-0d9488)](https://v2.tauri.app)
 [![License: MIT](https://img.shields.io/github/license/karan5028ji/Win-Optimizer-Pro)](LICENSE)
