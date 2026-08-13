@@ -1,4 +1,5 @@
 use std::io::{BufRead, BufReader, Read};
+use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -7,10 +8,76 @@ use std::time::{Duration, Instant};
 
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, State};
+use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+use windows_sys::Win32::System::JobObjects::{
+    JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+};
+use windows_sys::Win32::System::Threading::{
+    AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+};
 use windows_sys::Win32::UI::Shell::{IsUserAnAdmin, ShellExecuteW};
 
+/// A kill-on-close Windows job handle. Closing the handle terminates every
+/// process in the job - including grandchildren that reparented out of the
+/// direct tree (winget's msiexec installers, detached processes), which
+/// `taskkill /T` alone can miss.
+///
+/// HANDLE is a raw pointer (not Send/Sync), so we wrap it. The value is only
+/// ever closed from the owning thread; the unsafe impl is safe because the
+/// handle is never shared mutably across threads and Drop is idempotent.
+struct JobHandle(HANDLE);
+
+unsafe impl Send for JobHandle {}
+unsafe impl Sync for JobHandle {}
+
+impl Drop for JobHandle {
+    fn drop(&mut self) {
+        unsafe {
+            CloseHandle(self.0);
+        }
+    }
+}
+
+/// A spawned PowerShell run plus its kill-on-close job.
+struct Managed {
+    child: Option<Child>,
+    job: Option<JobHandle>,
+}
+
+impl Managed {
+    fn kill(&mut self) {
+        // Closing the job handle terminates the whole tree. Fall back to
+        // taskkill /T /F for the direct child when the job is absent
+        // (creation/assignment failed, e.g. the parent already put the app in
+        // a job that blocks nesting).
+        self.job = None;
+        if let Some(c) = self.child.as_mut() {
+            kill_tree(c);
+        }
+    }
+
+    /// Called when a run completes naturally. The job handle is deliberately
+    /// leaked so processes the engine launched with Start-Process (control
+    /// panels, the new Explorer, installers that should outlive the run) are
+    /// allowed to keep running; closing it would kill them.
+    fn detach_job(&mut self) {
+        if let Some(job) = self.job.take() {
+            std::mem::forget(job);
+        }
+    }
+}
+
+impl Drop for Managed {
+    fn drop(&mut self) {
+        // Belt-and-braces: dropping the job kills any process still in it. On
+        // natural completion supervise_run detaches the job first.
+        self.kill();
+    }
+}
+
 struct Runner {
-    child: Arc<Mutex<Option<Child>>>,
+    child: Arc<Mutex<Option<Managed>>>,
 }
 
 impl Runner {
@@ -19,15 +86,19 @@ impl Runner {
             child: Arc::new(Mutex::new(None)),
         }
     }
-    fn store(&self, child: Child) {
-        *self.child.lock().unwrap() = Some(child);
+    fn store(&self, managed: Managed) {
+        *self.child.lock().unwrap() = Some(managed);
     }
     fn stop(&self) {
-        if let Some(mut child) = self.child.lock().unwrap().take() {
-            kill_tree(&mut child);
+        // Take the Managed out first; the temporary mutex guard is dropped at
+        // the end of this statement so kill() (taskkill fallback, up to 5s)
+        // never runs while holding the lock.
+        let mut managed = self.child.lock().unwrap().take();
+        if let Some(m) = managed.as_mut() {
+            m.kill();
         }
     }
-    fn child_handle(&self) -> Arc<Mutex<Option<Child>>> {
+    fn child_handle(&self) -> Arc<Mutex<Option<Managed>>> {
         Arc::clone(&self.child)
     }
 }
@@ -152,12 +223,12 @@ fn wide(s: &str) -> Vec<u16> {
 }
 
 fn debug_log(msg: &str) {
-    if std::env::var("PC_OPT_DEBUG").is_err() {
+    if std::env::var("WIN_OPT_DEBUG").is_err() {
         return;
     }
     if let Some(dir) = std::env::var_os("TEMP") {
         use std::io::Write;
-        let path = Path::new(&dir).join("pcopt_resolve.log");
+        let path = Path::new(&dir).join("winopt_resolve.log");
         if let Ok(mut f) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -214,10 +285,10 @@ fn resolve_script(app: &AppHandle) -> Option<PathBuf> {
     found
 }
 
-fn spawn_powershell(script: &Path, args: &[String]) -> Result<Child, String> {
+fn spawn_powershell(script: &Path, args: &[String]) -> Result<Managed, String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    Command::new("powershell.exe")
+    let mut child = Command::new("powershell.exe")
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(script)
         .args(args)
@@ -226,7 +297,37 @@ fn spawn_powershell(script: &Path, args: &[String]) -> Result<Child, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Put the process in a kill-on-close job. On Windows 8+ every descendant
+    // (winget, DISM, msiexec, detached installers) is auto-assigned to the job,
+    // so closing the job on Stop reaps the whole tree even if it reparented.
+    let mut job: HANDLE = std::ptr::null_mut();
+    unsafe {
+        job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if !job.is_null() {
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let ok = SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            ) != 0;
+            let assigned =
+                ok && AssignProcessToJobObject(job, child.as_raw_handle() as HANDLE) != 0;
+            if !assigned {
+                CloseHandle(job);
+                job = std::ptr::null_mut();
+            }
+        }
+    }
+    let job = if job.is_null() { None } else { Some(JobHandle(job)) };
+
+    Ok(Managed {
+        child: Some(child),
+        job,
+    })
 }
 
 /// Run a quick ps1 command and return its combined stdout.
@@ -236,7 +337,8 @@ fn run_capture(app: &AppHandle, extra: &[&str], timeout: Duration) -> Result<Str
     let script = resolve_script(app).ok_or_else(|| "optimizer.ps1 not found".to_string())?;
     let mut args: Vec<String> = vec!["-NoElevate".into()];
     args.extend(extra.iter().map(|s| s.to_string()));
-    let mut child = spawn_powershell(&script, &args)?;
+    let mut managed = spawn_powershell(&script, &args)?;
+    let child = managed.child.as_mut().ok_or("managed run has no child")?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
@@ -257,22 +359,44 @@ fn run_capture(app: &AppHandle, extra: &[&str], timeout: Duration) -> Result<Str
 
     let deadline = Instant::now() + timeout;
     loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) => {
-                if Instant::now() >= deadline {
-                    kill_tree(&mut child);
-                    return Err(format!(
-                        "Command timed out after {}s",
-                        timeout.as_secs()
-                    ));
-                }
-                thread::sleep(Duration::from_millis(100));
-            }
-            Err(e) => return Err(e.to_string()),
+        let exited = managed
+            .child
+            .as_mut()
+            .map(|c| c.try_wait())
+            .transpose()
+            .map_err(|e| e.to_string())?
+            .is_some();
+        if exited {
+            break;
         }
+        if Instant::now() >= deadline {
+            managed.kill();
+            return Err(format!(
+                "Command timed out after {}s",
+                timeout.as_secs()
+            ));
+        }
+        thread::sleep(Duration::from_millis(100));
     }
-    Ok(reader.join().unwrap_or_default())
+
+    // Drain buffered output with the same grace period as supervise_run. A
+    // grandchild that inherits the stdout pipe keeps it open past EOF; without
+    // this fallback reader.join() would block forever and the invoke would
+    // never resolve.
+    let drain_deadline = Instant::now() + DRAIN_GRACE;
+    loop {
+        if reader.is_finished() {
+            return Ok(reader.join().unwrap_or_default());
+        }
+        if Instant::now() >= drain_deadline {
+            managed.kill();
+            return Err(format!(
+                "Command output drain timed out after {}s",
+                DRAIN_GRACE.as_secs()
+            ));
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 /// Cached, async wrapper so no capture ever blocks the Tauri main thread.
@@ -461,6 +585,15 @@ async fn get_startup_items(app: AppHandle, cache: State<'_, AppCache>) -> Result
 }
 
 #[tauri::command]
+async fn get_context_menu(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_capture(&app, &["-ContextMenuState"], Duration::from_secs(30))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn get_configs(app: AppHandle, cache: State<'_, AppCache>) -> Result<String, String> {
     cached_capture(
         app,
@@ -506,7 +639,7 @@ const DRAIN_GRACE: Duration = Duration::from_secs(5);
 fn supervise_run<L>(
     stdout: Option<ChildStdout>,
     stderr: Option<ChildStderr>,
-    child: Arc<Mutex<Option<Child>>>,
+    child: Arc<Mutex<Option<Managed>>>,
     seq: u32,
     emit_log: L,
     emit_done: impl FnOnce(u32),
@@ -534,21 +667,38 @@ fn supervise_run<L>(
     // Wait for the child process to exit, reaping it from state when done.
     // Polling (instead of a blocking wait) keeps this decoupled from Stop.
     loop {
-        let exited = {
+        let (exited, reaped) = {
             let mut guard = child.lock().unwrap();
-            match guard.as_mut().map(|c| c.try_wait()) {
-                Some(Ok(Some(_))) => {
-                    guard.take();
-                    true
+            let child_exited = guard
+                .as_mut()
+                .and_then(|m| m.child.as_mut())
+                .map(|c| c.try_wait())
+                .transpose()
+                .ok()
+                .flatten()
+                .is_some();
+            let missing = guard
+                .as_ref()
+                .map(|m| m.child.is_none())
+                .unwrap_or(true);
+            let done = child_exited || missing;
+            if done {
+                // Natural exit: detach the job so Start-Process panels and
+                // installers that should outlive the run are not killed when
+                // the Managed is dropped below.
+                if let Some(m) = guard.as_mut() {
+                    m.detach_job();
                 }
-                Some(Ok(None)) => false,
-                _ => {
-                    guard.take();
-                    true
-                }
+                (true, guard.take())
+            } else {
+                (false, None)
             }
         };
         if exited {
+            // Drop the reaped Managed outside the lock: its Drop runs the
+            // taskkill fallback, which must never hold the shared mutex (it
+            // would block Stop for up to its 5s wait).
+            drop(reaped);
             break;
         }
         thread::sleep(Duration::from_millis(100));
@@ -557,21 +707,28 @@ fn supervise_run<L>(
     // Drain buffered output with a grace period. If a grandchild is still
     // holding the pipe, force-kill the whole tree to unblock the readers.
     let deadline = Instant::now() + DRAIN_GRACE;
-    loop {
+    let drained = loop {
         if threads.iter().all(|t| t.is_finished()) {
-            break;
+            break true;
         }
         if Instant::now() >= deadline {
-            let mut c = child.lock().unwrap().take();
-            if let Some(c) = c.as_mut() {
-                kill_tree(c);
+            let mut m = child.lock().unwrap().take();
+            if let Some(m) = m.as_mut() {
+                m.kill();
             }
-            break;
+            break false;
         }
         thread::sleep(Duration::from_millis(50));
-    }
-    for t in threads {
-        let _ = t.join();
+    };
+
+    // NEVER block on thread.join() here: a grandchild that inherited the pipe
+    // can keep a reader thread alive indefinitely, and if we block we never
+    // emit done - leaving the UI stuck in "running" with Stop a no-op. We only
+    // join readers that already finished.
+    if drained {
+        for t in threads {
+            let _ = t.join();
+        }
     }
 
     // Always emit done so the UI can never stay stuck in "running".
@@ -586,10 +743,10 @@ fn run_optimizer(
     args: Vec<String>,
 ) -> Result<(), String> {
     let script = resolve_script(&app).ok_or_else(|| "optimizer.ps1 not found".to_string())?;
-    let mut child = spawn_powershell(&script, &args)?;
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    state.store(child);
+    let mut managed = spawn_powershell(&script, &args)?;
+    let stdout = managed.child.as_mut().unwrap().stdout.take();
+    let stderr = managed.child.as_mut().unwrap().stderr.take();
+    state.store(managed);
 
     let handle = app.clone();
     let child_handle = state.child_handle();
@@ -643,14 +800,6 @@ fn request_elevation() {
 }
 
 pub fn run() {
-    #[cfg(target_os = "windows")]
-    {
-        if std::env::var("PC_OPT_NO_ELEVATE").is_err() && unsafe { IsUserAnAdmin() } == 0 {
-            request_elevation();
-            return;
-        }
-    }
-
     tauri::Builder::default()
         .manage(Runner::new())
         .manage(AppCache::default())
@@ -668,6 +817,7 @@ pub fn run() {
             get_legacy_panels,
             get_preflight,
             get_startup_items,
+            get_context_menu,
             get_configs,
             get_tweak_registry_info,
             run_optimizer,
@@ -706,7 +856,10 @@ mod tests {
             .expect("spawn powershell");
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
-        let shared = Arc::new(Mutex::new(Some(child)));
+        let shared = Arc::new(Mutex::new(Some(Managed {
+            child: Some(child),
+            job: None,
+        })));
 
         let logs = Arc::new(Mutex::new(Vec::<String>::new()));
         let done = Arc::new(Mutex::new(false));

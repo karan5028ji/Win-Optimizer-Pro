@@ -1,4 +1,4 @@
-# winutil.ps1 - WinUtil-style feature module for the PC Optimizer
+# winutil.ps1 - WinUtil-style feature module for Win-Optimizer-Pro
 # Dot-sourced from optimizer.ps1 alongside engine.ps1.
 # Implements: WinGet Install/Upgrade/Uninstall, DNS switcher,
 # Windows Update modes, Power plans, Windows Features, system Fixes,
@@ -148,9 +148,14 @@ function Get-WingetInstalled {
     $raw = & winget.exe list --disable-interactivity --accept-source-agreements --accept-package-agreements 2>$null
     $ids = @()
     foreach ($line in $raw) {
-        if ($line -match '^\S+\.\S+\s') {
-            $parts = ($line -split '\s{2,}', 3)
-            if ($parts.Count -ge 1) { $ids += $parts[0].Trim() }
+        # winget list columns: Name | Id | Version | Available | Source
+        # The package Id is the SECOND column; the first is the display Name
+        # (which rarely contains a dot, so the old regex never matched and the
+        # wrong column was captured). Skip header / separator / blank lines by
+        # requiring a dotted Id in column two.
+        $parts = @(($line -split '\s{2,}') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        if ($parts.Count -ge 2 -and $parts[1] -match '^\S+\.\S+$') {
+            $ids += $parts[1]
         }
     }
     $Script:WingetInstalledCache = $ids
@@ -834,7 +839,12 @@ function New-Win11Iso {
             return
         }
         if ($Index -le 0 -or $Index -gt $indexes[-1]) { $Index = $indexes[-1] }
-        $edition = ($info | Select-String -Pattern "^Edition ID\s*:\s*(\S+)").Matches[0].Groups[1].Value
+        $editionMatch = $info | Select-String -Pattern "^Edition ID\s*:\s*(\S+)"
+        if (-not $editionMatch) {
+            Write-Log "[win11] ERROR: could not determine edition for image index $Index."
+            return
+        }
+        $edition = $editionMatch.Matches[0].Groups[1].Value
         Write-Log "[win11] mounting image index $Index ($edition) ..."
 
         DISM.exe /Mount-Image /ImageFile:$wim /Index:$Index /MountDir:$mountDir /Optimize | ForEach-Object { Write-Log $_ }
@@ -1225,6 +1235,17 @@ function Set-ContextMenuStyle {
     }
 }
 
+function Get-ContextMenuState {
+    <#
+        .SYNOPSIS
+        Reports whether the classic (Win10-style) context menu is enabled.
+        Emits CTXMENU|classic|true|false.
+    #>
+    $clsid = 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}'
+    $classic = Test-Path -LiteralPath $clsid
+    Write-Log "CTXMENU|classic|$classic"
+}
+
 function Get-StartupItems {
     <#
         .SYNOPSIS
@@ -1346,7 +1367,7 @@ function Get-TweakRegistryInfo {
         'searchweb'     = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search\ConnectedSearchUseWeb=0'
     }
     foreach ($k in $info.Keys) {
-        Write-Log "TWEETINFO|$k|$($info[$k])"
+        Write-Log "TWEAKINFO|$k|$($info[$k])"
     }
 }
 

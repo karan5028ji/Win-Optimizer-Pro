@@ -80,9 +80,9 @@ function Invoke-LaunchPortable {
     Remove-Item $runDir -Recurse -Force -ErrorAction SilentlyContinue
     Expand-Archive -Path $zip -DestinationPath $runDir
 
-    $exe = Join-Path $runDir 'pc-optimizer.exe'
+    $exe = Join-Path $runDir 'win-optimizer-pro.exe'
     if (-not (Test-Path $exe)) {
-        throw 'Portable archive did not contain pc-optimizer.exe.'
+        throw 'Portable archive did not contain win-optimizer-pro.exe.'
     }
 
     Write-Status "Extracted to $runDir"

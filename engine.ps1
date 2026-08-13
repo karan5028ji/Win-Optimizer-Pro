@@ -1,4 +1,4 @@
-# engine.ps1 - Core module for the PC Optimizer
+# engine.ps1 - Core module for Win-Optimizer-Pro
 # Dot-source from optimizer.ps1 or the GUI wrapper.
 # No param block on purpose: this file is a function library.
 
@@ -180,13 +180,26 @@ function Clear-FolderItems {
         return
     }
 
+    $enumerable = $true
     if ($Count -lt 0) {
-        $Count = [Math]::Max(0, (Get-FolderEntryCount -Path $Path))
-        if ($Count -gt 0) { Add-PhaseUnits -Units $Count }
+        $Count = Get-FolderEntryCount -Path $Path
+        if ($Count -lt 0) {
+            # Enumeration failed (access denied / mid-deletion). Don't report it
+            # as "already empty" - run the sweep anyway so whatever is reachable
+            # still gets removed. Progress units are unknown (0) in this case.
+            $enumerable = $false
+            $Count = 0
+            Write-Log "[clean] $Label : cannot enumerate (locked/access denied), running sweep anyway ..."
+        }
+        elseif ($Count -gt 0) {
+            Add-PhaseUnits -Units $Count
+        }
     }
     if ($Count -eq 0) {
-        Write-Log "[clean] $Label : already empty"
-        return
+        if ($enumerable) {
+            Write-Log "[clean] $Label : already empty"
+            return
+        }
     }
     if ($DryRun) {
         if ($script:ProgressActive) {
@@ -365,10 +378,11 @@ function Clear-TempFolders {
     # while scanning so the UI never looks frozen on huge temp trees.
     $units = 0
     foreach ($t in $targets) {
-        # -1 (enumeration denied) is clamped to 0 so a locked folder never
-        # shows a negative count in the log; the cleanup itself still runs.
-        $t.Count = [Math]::Max(0, (Get-FolderEntryCount -Path $t.Path))
-        $units += $t.Count
+        # -1 (enumeration denied) is clamped for the unit total so a locked
+        # folder never shows a negative count in the log; the -1 is still passed
+        # to Clear-FolderItems so it knows to run the sweep anyway.
+        $t.Count = Get-FolderEntryCount -Path $t.Path
+        $units += [Math]::Max(0, $t.Count)
         if ($script:ProgressActive) {
             Write-ProgressLine -Force -Message "Scanning $($t.Label) ..."
         }
@@ -432,9 +446,9 @@ function Clear-NetworkCache {
     if (-not $any -or $FlushDNS) { $units += 1 }
     $folderCounts = @{}
     foreach ($f in $folders) {
-        $c = [Math]::Max(0, (Get-FolderEntryCount -Path $f))
+        $c = Get-FolderEntryCount -Path $f
         $folderCounts[$f] = $c
-        $units += $c
+        $units += [Math]::Max(0, $c)
     }
     Add-PhaseUnits -Units $units
 
@@ -902,7 +916,7 @@ function New-RestorePoint {
         Write-Log "[restorepoint] enabling System Restore on $env:SystemDrive ..."
         Enable-ComputerRestore -Drive "$env:SystemDrive" -ErrorAction Stop
         Write-Log "[restorepoint] creating restore point (may take a moment) ..."
-        Checkpoint-Computer -Description 'PC Optimizer' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
+        Checkpoint-Computer -Description 'Win-Optimizer-Pro' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
         Write-Log "[restorepoint] restore point created."
     }
     catch {

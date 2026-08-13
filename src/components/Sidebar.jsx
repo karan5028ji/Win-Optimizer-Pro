@@ -30,7 +30,7 @@ export default function Sidebar({ tab, onTab, running }) {
         </div>
         <div>
           <p className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            PC Optimizer
+            Win-Optimizer-Pro
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">Power-user suite</p>
         </div>

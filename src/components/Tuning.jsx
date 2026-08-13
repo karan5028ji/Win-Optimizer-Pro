@@ -17,6 +17,7 @@ import { useApp } from "../lib/app-context";
 import {
   getDnsPresets,
   getFixes,
+  getContextMenuState,
   getLegacyPanels,
   getPowerPlans,
   getStartupItems,
@@ -92,13 +93,13 @@ export default function Tuning() {
     getWinFeatures().then(setFeatures).catch(() => {});
     getFixes().then(setFixes).catch(() => {});
     getLegacyPanels().then(setPanels).catch(() => {});
+    getContextMenuState().then(setCtxClassic).catch(() => {});
     refreshStartup();
   }, []);
 
   const refreshStartup = () => {
     getStartupItems().then((s) => {
       setStartup(s);
-      setCtxClassic(false);
     }).catch(() => {});
   };
 
@@ -317,7 +318,6 @@ export default function Tuning() {
               onChange={(v) => {
                 setCtxClassic(v);
                 run(["-SetContextMenu", v ? "Classic" : "Default"]);
-                setTimeout(() => setCtxClassic(false), 2000);
               }}
               size="sm"
             />
