@@ -10,11 +10,9 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, State};
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::System::JobObjects::{
-    JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-};
-use windows_sys::Win32::System::Threading::{
-    AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+    AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    SetInformationJobObject,
 };
 use windows_sys::Win32::UI::Shell::{IsUserAnAdmin, ShellExecuteW};
 
@@ -70,9 +68,14 @@ impl Managed {
 
 impl Drop for Managed {
     fn drop(&mut self) {
-        // Belt-and-braces: dropping the job kills any process still in it. On
-        // natural completion supervise_run detaches the job first.
-        self.kill();
+        // Close the job if it is still present; KILL_ON_JOB_CLOSE reaps any
+        // process still inside it. On natural completion detach_job() already
+        // leaked the handle, so this is a no-op. Crucially we must NOT run
+        // taskkill here: the direct child has already exited and killing the
+        // tree at this point would race the parent's buffered stdout flush
+        // (dropping output) and reap Start-Process children that are meant to
+        // outlive the run.
+        self.job = None;
     }
 }
 
@@ -288,7 +291,7 @@ fn resolve_script(app: &AppHandle) -> Option<PathBuf> {
 fn spawn_powershell(script: &Path, args: &[String]) -> Result<Managed, String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let mut child = Command::new("powershell.exe")
+    let child = Command::new("powershell.exe")
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(script)
         .args(args)
@@ -304,21 +307,22 @@ fn spawn_powershell(script: &Path, args: &[String]) -> Result<Managed, String> {
     // so closing the job on Stop reaps the whole tree even if it reparented.
     let mut job: HANDLE = std::ptr::null_mut();
     unsafe {
-        job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-        if !job.is_null() {
+        let created = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if !created.is_null() {
             let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
             info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
             let ok = SetInformationJobObject(
-                job,
+                created,
                 JobObjectExtendedLimitInformation,
                 &info as *const _ as *const core::ffi::c_void,
                 std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
             ) != 0;
             let assigned =
-                ok && AssignProcessToJobObject(job, child.as_raw_handle() as HANDLE) != 0;
-            if !assigned {
-                CloseHandle(job);
-                job = std::ptr::null_mut();
+                ok && AssignProcessToJobObject(created, child.as_raw_handle() as HANDLE) != 0;
+            if assigned {
+                job = created;
+            } else {
+                CloseHandle(created);
             }
         }
     }
