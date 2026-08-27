@@ -218,7 +218,7 @@ function Clear-FolderItems {
     }
     catch { }
     if (-not $isElevated -and ($Path -like "$env:SystemRoot\Temp" -or $Path -like "$env:SystemRoot\Prefetch")) {
-        Write-Log "[warn] $Label : not running as admin — some files may be locked. Restart as admin for full cleanup."
+        Write-Log "[warn] $Label : not running as admin - some files may be locked. Restart as admin for full cleanup."
     }
 
     Write-Log "[clean] $Label : removing $Count item(s) ..."
@@ -227,7 +227,7 @@ function Clear-FolderItems {
         Invoke-FastDelete -Path $Path -Label $Label
     }
     catch {
-        Write-Log "[error] $Label : cleanup failed — $($_.Exception.Message)"
+        Write-Log "[error] $Label : cleanup failed - $($_.Exception.Message)"
         return
     }
     $pass = $script:FastDeleteResult
@@ -238,13 +238,13 @@ function Clear-FolderItems {
     # retry. A full takeown /r + icacls /t sweep on every clean was the single
     # biggest slowdown - it walked the whole temp tree every run.
     if ($left -gt 0) {
-        Write-Log "[acl] $left item(s) locked — taking ownership once ..."
+        Write-Log "[acl] $left item(s) locked - taking ownership once ..."
         Grant-Privileges -Path $Path -DryRun:$DryRun
         try {
             Invoke-FastDelete -Path $Path -Label $Label
         }
         catch {
-            Write-Log "[error] $Label : retry failed — $($_.Exception.Message)"
+            Write-Log "[error] $Label : retry failed - $($_.Exception.Message)"
         }
         $retry = $script:FastDeleteResult
         $deleted += $retry.Deleted
