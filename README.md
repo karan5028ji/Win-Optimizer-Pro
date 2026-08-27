@@ -198,3 +198,16 @@ Issues, ideas and PRs are welcome. Open an issue to report bugs or request tweak
 ## 📄 License
 
 MIT
+
+---
+
+## About the Developer
+
+
+This project is maintained and developed by **Kxrn** — an independent software developer and music producer. I specialize in building local AI orchestrators, system daemons, and indie music. 
+
+
+🌐 **Explore my ecosystem:**
+- **Developer Portfolio:** [kxrn.is-a.dev](https://kxrn.is-a.dev/)
+- **GitHub Profile:** [@karan5028ji](https://github.com/karan5028ji)
+- **Music Label:** Founder of [DuskyMoon Productions](https://duskymoon.vercel.app)
