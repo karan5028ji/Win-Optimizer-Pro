@@ -209,9 +209,27 @@ function Clear-FolderItems {
         return
     }
 
+    # Warn if trying to clean a system folder without elevation.
+    $isElevated = $false
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+        $isElevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch { }
+    if (-not $isElevated -and ($Path -like "$env:SystemRoot\Temp" -or $Path -like "$env:SystemRoot\Prefetch")) {
+        Write-Log "[warn] $Label : not running as admin — some files may be locked. Restart as admin for full cleanup."
+    }
+
     Write-Log "[clean] $Label : removing $Count item(s) ..."
     $deleted = 0
-    Invoke-FastDelete -Path $Path -Label $Label
+    try {
+        Invoke-FastDelete -Path $Path -Label $Label
+    }
+    catch {
+        Write-Log "[error] $Label : cleanup failed — $($_.Exception.Message)"
+        return
+    }
     $pass = $script:FastDeleteResult
     $deleted += $pass.Deleted
     $left = $pass.Remaining
@@ -220,9 +238,14 @@ function Clear-FolderItems {
     # retry. A full takeown /r + icacls /t sweep on every clean was the single
     # biggest slowdown - it walked the whole temp tree every run.
     if ($left -gt 0) {
-        Write-Log "[acl] $left item(s) locked - taking ownership once ..."
+        Write-Log "[acl] $left item(s) locked — taking ownership once ..."
         Grant-Privileges -Path $Path -DryRun:$DryRun
-        Invoke-FastDelete -Path $Path -Label $Label
+        try {
+            Invoke-FastDelete -Path $Path -Label $Label
+        }
+        catch {
+            Write-Log "[error] $Label : retry failed — $($_.Exception.Message)"
+        }
         $retry = $script:FastDeleteResult
         $deleted += $retry.Deleted
         $left = $retry.Remaining
@@ -232,7 +255,8 @@ function Clear-FolderItems {
     if ($deleted -lt $Count) {
         Step-Progress -Units ($Count - $deleted)
     }
-    Write-Log "[done] $Label : $left item(s) remain (locked/in-use)"
+    $removedCount = [Math]::Max(0, $Count - $left)
+    Write-Log "[done] $Label : removed $removedCount of $Count item(s), $left remain (locked/in-use)"
 }
 
 function Invoke-FastDelete {
@@ -305,7 +329,10 @@ function Invoke-FastDelete {
             Start-Sleep -Milliseconds 300
             $p.Refresh()
             if ($p.HasExited) { break }
-            if ($sw.Elapsed.TotalMinutes -gt 10) { $p.Kill(); break }
+            if ($sw.Elapsed.TotalMinutes -gt 10) {
+                Write-Log "[warn] $Label : robocopy timed out after 10 minutes, killing ..."
+                $p.Kill(); break
+            }
             $proc = $counter['lines']
             if ($proc -gt $done) {
                 $step = [Math]::Min($proc - $done, $script:PhaseUnitsTotal - $script:PhaseUnitsDone)
@@ -317,6 +344,14 @@ function Invoke-FastDelete {
         }
         $p.WaitForExit()
         $sw.Stop()
+
+        # robocopy exit codes: 0=no change, 1-7=success (various combos),
+        # >=8 indicates an error. Log unexpected errors so cleanup bugs are
+        # diagnosable from the console output.
+        $exitCode = $p.ExitCode
+        if ($exitCode -ge 8) {
+            Write-Log "[warn] $Label : robocopy exited with code $exitCode (error)"
+        }
 
         $proc = $counter['lines']
         if ($proc -gt $done) {

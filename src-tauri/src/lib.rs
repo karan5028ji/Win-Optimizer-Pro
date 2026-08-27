@@ -45,13 +45,32 @@ struct Managed {
 
 impl Managed {
     fn kill(&mut self) {
-        // Closing the job handle terminates the whole tree. Fall back to
-        // taskkill /T /F for the direct child when the job is absent
-        // (creation/assignment failed, e.g. the parent already put the app in
-        // a job that blocks nesting).
+        // 1. Drop the job handle FIRST. With KILL_ON_JOB_CLOSE this instantly
+        //    terminates every process in the job — including grandchildren that
+        //    reparented out of the direct tree (winget's msiexec installers,
+        //    DISM, detached Start-Process children).
         self.job = None;
+
+        // 2. Terminate the direct child immediately via TerminateProcess.
+        //    This is instant — no waiting for taskkill.
         if let Some(c) = self.child.as_mut() {
-            kill_tree(c);
+            let _ = c.kill();
+        }
+
+        // 3. Fire-and-forget taskkill /T /F as a final sweep for any orphans
+        //    that somehow escaped the job (e.g. nested job restriction).
+        //    Don't wait for it — the user should never see a delay on Stop.
+        if let Some(c) = self.child.as_ref() {
+            let pid = c.id();
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            let _ = Command::new("taskkill.exe")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
         }
     }
 
@@ -187,38 +206,6 @@ impl AppCache {
         };
         matches!(entry, Some((t, _)) if t.elapsed() < ttl)
     }
-}
-
-fn kill_tree(child: &mut Child) {
-    use std::io::Write;
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let pid = child.id();
-
-    // taskkill /T /F must be allowed to finish so the entire process tree
-    // (powershell + any winget/DISM grandchildren) is gone before we return.
-    // Fire-and-forget here left orphaned children running after Stop.
-    if let Ok(mut tk) = Command::new("taskkill.exe")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        // Give taskkill up to ~5s, then force-stop the direct child too.
-        for _ in 0..50 {
-            if let Ok(Some(_)) = tk.try_wait() {
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
-        let _ = tk.kill();
-    }
-    // Direct handle kill as a final safety net (also drains any buffered I/O).
-    let _ = child.kill();
-    let _ = child.wait();
-    let _ = std::io::stderr().flush();
 }
 
 fn wide(s: &str) -> Vec<u16> {
@@ -773,7 +760,10 @@ fn run_optimizer(
 }
 
 #[tauri::command]
-async fn stop_optimizer(state: State<'_, Runner>) -> Result<(), String> {
+async fn stop_optimizer(app: AppHandle, state: State<'_, Runner>) -> Result<(), String> {
+    // Emit a stopping event so the UI can react immediately (e.g. show
+    // "Stopping…" status) before the kill completes.
+    let _ = app.emit("optimizer:stopping", ());
     state.stop();
     Ok(())
 }

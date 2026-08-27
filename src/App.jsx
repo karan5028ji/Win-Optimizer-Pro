@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Sun,
   XCircle,
-  Zap,
 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import Console from "./components/Console";
@@ -30,6 +29,7 @@ import {
   runOptimizer,
   stopOptimizer,
 } from "./lib/backend";
+import { listen } from "@tauri-apps/api/event";
 
 const TABS = {
   dashboard: { label: "Dashboard", component: Dashboard },
@@ -71,10 +71,12 @@ function Toasts({ toasts }) {
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
-  const [dryRun, setDryRun] = useState(true);
+  const [dryRun, setDryRun] = useState(false);
   const [restorePoint, setRestorePoint] = useState(true);
   const [elevated, setElevated] = useState(false);
+  const [elevating, setElevating] = useState(false);
   const [running, setRunning] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [logs, setLogs] = useState([]);
   const [statusLine, setStatusLine] = useState("");
   const [progress, setProgress] = useState(null);
@@ -121,7 +123,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    isElevated().then(setElevated).catch(() => setElevated(false));
+    isElevated().then((isElev) => {
+      setElevated(isElev);
+      if (!isElev) {
+        setElevating(true);
+        relaunchElevated().catch(() => {
+          setElevating(false);
+          toast("Could not auto-elevate. Some features may require admin.", "error");
+        });
+      }
+    }).catch(() => setElevated(false));
     getSystemInfo().then(setSysInfo).catch(() => {});
     // Check for app updates once on startup. When one is available it is
     // downloaded + installed in the background; the user is only asked to
@@ -141,6 +152,9 @@ export default function App() {
         if (String(err).toLowerCase().includes("does not have an update")) return;
         console.warn("update check failed:", err);
       });
+    const unStopping = listen("optimizer:stopping", () => {
+      setStopping(true);
+    });
     const unLog = onLog((line) => {
       const clean = String(line).trim();
       // Live percent from the engine: "[PROGRESS]<0-100>|<message>".
@@ -181,14 +195,18 @@ export default function App() {
       runningRef.current = false;
       flushLogs();
       setRunning(false);
-      statusRef.current = "Finished.";
-      setStatusLine("Finished.");
-      toast("Operation finished.", "success");
+      setStopping(false);
+      progressRef.current = null;
+      setProgress(null);
+      statusRef.current = "Completed successfully.";
+      setStatusLine("Completed successfully.");
+      toast("Completed successfully.", "success");
     });
     return () => {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
       unLog.then((f) => f());
       unDone.then((f) => f());
+      unStopping.then((f) => f());
     };
   }, [toast, flushLogs]);
 
@@ -232,6 +250,7 @@ export default function App() {
         pushLine(`[error] ${err}\n`);
         runningRef.current = false;
         setRunning(false);
+        setStopping(false);
         progressRef.current = null;
         setProgress(null);
         statusRef.current = "Failed.";
@@ -243,13 +262,9 @@ export default function App() {
   );
 
   const cancel = useCallback(() => {
+    setStopping(true);
     stopOptimizer().catch(() => {});
-    toast("Stopping…", "info");
-  }, [toast]);
-
-  const restartAsAdmin = useCallback(() => {
-    relaunchElevated().catch(() => toast("Could not relaunch elevated.", "error"));
-  }, [toast]);
+  }, []);
 
   const TabComponent = TABS[tab].component;
 
@@ -281,7 +296,11 @@ export default function App() {
           <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 dark:border-slate-700 dark:bg-slate-900">
             <div className="flex min-w-0 items-center gap-3">
               <h1 className="section-title">{TABS[tab].label}</h1>
-              {elevated ? (
+              {elevating ? (
+                <span className="badge-info animate-pulse">
+                  <ShieldCheck size={12} /> Requesting admin…
+                </span>
+              ) : elevated ? (
                 <span className="badge-ok">
                   <ShieldCheck size={12} /> Elevated
                 </span>
@@ -292,15 +311,6 @@ export default function App() {
               )}
             </div>
             <div className="flex shrink-0 items-center gap-4">
-              {!elevated && (
-                <button
-                  onClick={restartAsAdmin}
-                  className="btn-secondary !px-3 !py-1.5 text-xs"
-                  title="Restart with administrator rights"
-                >
-                  <Zap size={13} /> Restart as Admin
-                </button>
-              )}
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500 dark:text-slate-400" title="Create a System Restore point before debloating or applying tweaks">
                   Restore point
@@ -332,7 +342,7 @@ export default function App() {
             <TabComponent />
           </main>
 
-            <Console running={running} progress={progress} onCancel={cancel} />
+            <Console running={running} stopping={stopping} progress={progress} onCancel={cancel} />
         </div>
       </div>
       <Toasts toasts={toasts} />
