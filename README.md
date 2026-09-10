@@ -6,7 +6,7 @@
 
 **A modern, enterprise-grade Windows optimizer, cleaner & debloater — powered by Rust, React and PowerShell.**
 
-[![Version](https://img.shields.io/badge/version-2.1.4-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
+[![Version](https://img.shields.io/badge/version-2.1.5-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
 [![CI](https://github.com/karan5028ji/Win-Optimizer-Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/karan5028ji/Win-Optimizer-Pro/actions)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)](https://www.microsoft.com/windows)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-0d9488)](https://v2.tauri.app)
@@ -52,9 +52,9 @@ The fastest way — one line, straight from GitHub, no install needed:
 irm https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 | iex
 ```
 
-Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.4_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
+Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.5_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
 
-Or install with **winget** (coming soon):
+Or install with **winget**:
 
 ```powershell
 winget install karan5028ji.WinOptimizerPro
@@ -168,7 +168,7 @@ npm run tauri build
 
 Output:
 
-- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.4_x64-setup.exe`
+- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.5_x64-setup.exe`
 - Binary: `src-tauri\target\release\win-optimizer-pro.exe`
 
 **Requirements:** Node.js 18+, Rust stable (MSVC toolchain), WebView2 (bundled with Windows 11 / modern Windows 10).

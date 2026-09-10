@@ -49,7 +49,7 @@ Settings → Secrets and variables → Actions:
 
 ## 4. Sign a release
 
-After publishing a release (e.g. `v2.1.4`), run the **Sign Release (SignPath)**
+After publishing a release (e.g. `v2.1.5`), run the **Sign Release (SignPath)**
 workflow manually with that tag. It downloads the unsigned installer from the
 release, submits it to SignPath, re-signs the Tauri updater `.sig` over the now
 signed bytes, and uploads the signed installer back to the same release.
