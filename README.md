@@ -6,7 +6,7 @@
 
 **A modern, enterprise-grade Windows optimizer, cleaner & debloater — powered by Rust, React and PowerShell.**
 
-[![Version](https://img.shields.io/badge/version-2.1.5-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
+[![Version](https://img.shields.io/badge/version-2.1.6-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
 [![CI](https://github.com/karan5028ji/Win-Optimizer-Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/karan5028ji/Win-Optimizer-Pro/actions)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)](https://www.microsoft.com/windows)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-0d9488)](https://v2.tauri.app)
@@ -52,7 +52,7 @@ The fastest way — one line, straight from GitHub, no install needed:
 irm https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 | iex
 ```
 
-Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.5_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
+Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.6_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
 
 Or install with **winget**:
 
@@ -64,14 +64,19 @@ winget install karan5028ji.WinOptimizerPro
 > checks for updates on startup and installs them in the background
 > ([auto-updater](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)).
 
+## 🆕 What's new in v2.1.6
+
+| Area | Change |
+| --- | --- |
+| 👻 **Deep Boot Guard** | New **Boot Guard** tab — the *Ghost Startup Inspector* scans **4 boot layers** Task Manager hides: registry Run keys (HKCU + HKLM 64/32-bit), hidden Startup-folder shortcuts, **scheduled tasks with logon/boot triggers** and **auto-start background services** (VMs, daemons, updaters) |
+| 🎯 **Impact ranking** | Every entry gets a RAM estimate + High / Medium / Low impact badge from a known-launcher database (Docker ~2.6 GB, Steam/Epic ~350 MB, …). Audio drivers, Windows Security and kernel services are auto-whitelisted as Safe |
+| ⚡ **1-Click "Instant 5-Second Boot"** | Creates a System Restore point + JSON backup, then disables every non-essential heavy launcher in one go — keeps drivers & security untouched. **Restore from backup** re-enables everything |
+| 🎛️ **Per-entry toggle** | Enable/disable any ghost item (registry, task, service, folder shortcut) without uninstalling |
+
 ## 🆕 What's new in v2.1.5
 
 | Area | Change |
 | --- | --- |
-| 🐛 **Ghost Startup Inspector — Deep Boot Guard** | New tab that scans **4 boot layers** Task Manager hides: registry Run keys (HKCU + HKLM 64/32-bit), hidden Startup-folder shortcuts, **scheduled tasks with logon/boot triggers** and **auto-start background services** (VMs, daemons, updaters) |
-| 🎯 **Impact ranking** | Every entry gets a RAM estimate + High / Medium / Low impact badge from a known-launcher database (Docker ~2.6 GB, Steam/Epic ~350 MB, …). Audio drivers, Windows Security and kernel services are auto-whitelisted as Safe |
-| ⚡ **1-Click "Instant 5-Second Boot"** | Creates a System Restore point + JSON backup, then disables every non-essential heavy launcher in one go — keeps drivers & security untouched. **Restore from backup** re-enables everything |
-| 🎛️ **Per-entry toggle** | Enable/disable any ghost item (registry, task, service, folder shortcut) without uninstalling |
 | 🏆 **Published to winget** | Now installable via `winget install karan5028ji.WinOptimizerPro` — PR merged into `microsoft/winget-pkgs` |
 
 ## 🆕 What's new in v2.1.4
@@ -183,7 +188,7 @@ npm run tauri build
 
 Output:
 
-- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.5_x64-setup.exe`
+- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.6_x64-setup.exe`
 - Binary: `src-tauri\target\release\win-optimizer-pro.exe`
 
 **Requirements:** Node.js 18+, Rust stable (MSVC toolchain), WebView2 (bundled with Windows 11 / modern Windows 10).
