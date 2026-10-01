@@ -8,6 +8,7 @@ import {
   Download,
   Wrench,
   Rocket,
+  Ghost,
 } from "lucide-react";
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
   { id: "clean", label: "Deep Clean", icon: SprayCan },
   { id: "debloat", label: "Debloater", icon: AppWindow },
   { id: "tweaks", label: "System Tweaks", icon: SlidersHorizontal },
+  { id: "bootguard", label: "Boot Guard", icon: Ghost },
   { id: "tuning", label: "Tuning", icon: Wrench },
   { id: "profiles", label: "Profiles", icon: Rocket },
 ];

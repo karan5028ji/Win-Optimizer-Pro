@@ -138,6 +138,7 @@ struct CacheInner {
     fixes: Option<(Instant, String)>,
     legacy_panels: Option<(Instant, String)>,
     startup_items: Option<(Instant, String)>,
+    boot_guard_items: Option<(Instant, String)>,
     configs: Option<(Instant, String)>,
     tweak_registry_info: Option<(Instant, String)>,
 }
@@ -160,6 +161,7 @@ impl AppCache {
             "fixes" => &guard.fixes,
             "legacy_panels" => &guard.legacy_panels,
             "startup_items" => &guard.startup_items,
+            "boot_guard_items" => &guard.boot_guard_items,
             "configs" => &guard.configs,
             "tweak_registry_info" => &guard.tweak_registry_info,
             _ => return None,
@@ -180,6 +182,7 @@ impl AppCache {
             "fixes" => &mut guard.fixes,
             "legacy_panels" => &mut guard.legacy_panels,
             "startup_items" => &mut guard.startup_items,
+            "boot_guard_items" => &mut guard.boot_guard_items,
             "configs" => &mut guard.configs,
             "tweak_registry_info" => &mut guard.tweak_registry_info,
             _ => return,
@@ -200,6 +203,7 @@ impl AppCache {
             "fixes" => &guard.fixes,
             "legacy_panels" => &guard.legacy_panels,
             "startup_items" => &guard.startup_items,
+            "boot_guard_items" => &guard.boot_guard_items,
             "configs" => &guard.configs,
             "tweak_registry_info" => &guard.tweak_registry_info,
             _ => return false,
@@ -576,6 +580,19 @@ async fn get_startup_items(app: AppHandle, cache: State<'_, AppCache>) -> Result
 }
 
 #[tauri::command]
+async fn get_boot_guard_items(app: AppHandle, cache: State<'_, AppCache>) -> Result<String, String> {
+    cached_capture(
+        app,
+        cache,
+        "boot_guard_items",
+        &["-ListBootGuard"],
+        Duration::from_secs(15),
+        Duration::from_secs(60),
+    )
+    .await
+}
+
+#[tauri::command]
 async fn get_context_menu(app: AppHandle) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         run_capture(&app, &["-ContextMenuState"], Duration::from_secs(30))
@@ -812,6 +829,7 @@ pub fn run() {
             get_legacy_panels,
             get_preflight,
             get_startup_items,
+            get_boot_guard_items,
             get_context_menu,
             get_configs,
             get_tweak_registry_info,

@@ -54,6 +54,13 @@
 #   .\optimizer.ps1 -ListStartup
 #   .\optimizer.ps1 -SetStartup -Item "HKCU|OneDrive" -Disable
 #
+# Deep Boot Guard (Ghost Startup Inspector):
+#   .\optimizer.ps1 -ListBootGuard            # 4-level deep scan (BOOTGUARD rows)
+#   .\optimizer.ps1 -SetBootGuard "<id>" -Disable   # toggle one entry off
+#   .\optimizer.ps1 -SetBootGuard "<id>" -Enable    # toggle one entry on
+#   .\optimizer.ps1 -BootGuardPreset          # "Instant 5-Second Boot" (restore point + backup)
+#   .\optimizer.ps1 -RestoreBootGuard         # re-enable from latest preset backup
+#
 # Pre-flight checks:
 #   .\optimizer.ps1 -Preflight isod|dism|debloat|install
 #
@@ -143,6 +150,13 @@ param(
     [string]$SetStartup = $null,
     [switch]$EnableStartup,
     [switch]$DisableStartup,
+    # --- Deep Boot Guard (Ghost Startup Inspector) ---
+    [switch]$ListBootGuard,
+    [string]$SetBootGuard = $null,
+    [switch]$EnableBootGuard,
+    [switch]$DisableBootGuard,
+    [switch]$BootGuardPreset,
+    [switch]$RestoreBootGuard,
     # --- Pre-flight ---
     [ValidateSet('iso', 'dism', 'debloat', 'install')]
     [string]$Preflight = $null
@@ -196,6 +210,10 @@ Win-Optimizer-Pro - CLI
   -SysInfo              print system specs
   -Restore              re-register provisioned apps (undo debloat)
   -CreateRestorePoint   create a System Restore point before debloat/tweaks
+  -ListBootGuard        deep 4-level boot scan (ghost startup inspector)
+  -SetBootGuard X -Disable | -Enable   toggle one boot entry
+  -BootGuardPreset      one-click "instant 5-second boot" (restore point + backup)
+  -RestoreBootGuard     re-enable everything from the preset backup
   -DryRun               preview only, change nothing
   -NoElevate            do not auto-request administrator rights
 "@ | Write-Host
@@ -206,7 +224,7 @@ $isAdmin = Test-IsAdmin
 if ($isAdmin) {
     Write-Log "[+] Running with administrator rights."
 }
-elseif ($DryRun -or $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $WingetList -or $ListDNS -or $ListUpdateModes -or $ListPower -or $ListFeatures -or $ListFixes -or $ListPanels -or $ListConfigs -or $ListStartup -or $ContextMenuState -or $Preflight -or $ExportConfig) {
+elseif ($DryRun -or $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $WingetList -or $ListDNS -or $ListUpdateModes -or $ListPower -or $ListFeatures -or $ListFixes -or $ListPanels -or $ListConfigs -or $ListStartup -or $ListBootGuard -or $ContextMenuState -or $Preflight -or $ExportConfig) {
     Write-Log "[dry-run] Read-only preview (non-admin)."
 }
 elseif ($NoElevate) {
@@ -430,11 +448,21 @@ if ($SetStartup) {
     else { Write-Log "[startup] specify -EnableStartup or -DisableStartup." }
 }
 
+# --- Deep Boot Guard (Ghost Startup Inspector) ---
+if ($ListBootGuard) { Get-BootGuardItems }
+if ($SetBootGuard) {
+    if ($EnableBootGuard) { Set-BootGuardItem -Item $SetBootGuard -Enable -DryRun:$DryRun }
+    elseif ($DisableBootGuard) { Set-BootGuardItem -Item $SetBootGuard -Disable -DryRun:$DryRun }
+    else { Write-Log "[bootguard] specify -EnableBootGuard or -DisableBootGuard." }
+}
+if ($BootGuardPreset) { Invoke-BootGuardPreset -DryRun:$DryRun }
+if ($RestoreBootGuard) { Restore-BootGuardBackup -DryRun:$DryRun }
+
 # --- Pre-flight (explicit call for the UI to display status) ---
 if ($Preflight) { Test-Preflight -Action $Preflight | Out-Null }
 
 # --- Summary ----------------------------------------------------------------
-$ranAnything = $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $Restore -or $Network -or $Clean -or $Debloat -or $Tweaks -or $UndoTweaks -or $All -or $UserTemp -or $WindowsTemp -or $Prefetch -or $FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet -or $WingetList -or $WingetInstall -or $WingetUpgrade -or $WingetUpgradeAll -or $WingetUninstall -or $ListDNS -or $SetDNS -or $ListUpdateModes -or $SetUpdateMode -or $ListPower -or $SetPower -or $ListFeatures -or $SetFeature -or $ListFixes -or $RunFix -or $ListPanels -or $OpenPanel -or $EnableSsh -or $DisableSsh -or $CreateWin11Iso -or $Profile -or $ExportConfig -or $ListConfigs -or $ImportConfig -or $SetContextMenu -or $ContextMenuState -or $ListStartup -or $SetStartup -or $Preflight
+$ranAnything = $ListCategories -or $ListTweaks -or $TweakInfo -or $ListApps -or $SysInfo -or $TweakState -or $QuickScan -or $Restore -or $Network -or $Clean -or $Debloat -or $Tweaks -or $UndoTweaks -or $All -or $UserTemp -or $WindowsTemp -or $Prefetch -or $FlushDNS -or $Chrome -or $Edge -or $Firefox -or $INet -or $WingetList -or $WingetInstall -or $WingetUpgrade -or $WingetUpgradeAll -or $WingetUninstall -or $ListDNS -or $SetDNS -or $ListUpdateModes -or $SetUpdateMode -or $ListPower -or $SetPower -or $ListFeatures -or $SetFeature -or $ListFixes -or $RunFix -or $ListPanels -or $OpenPanel -or $EnableSsh -or $DisableSsh -or $CreateWin11Iso -or $Profile -or $ExportConfig -or $ListConfigs -or $ImportConfig -or $SetContextMenu -or $ContextMenuState -or $ListStartup -or $SetStartup -or $ListBootGuard -or $SetBootGuard -or $BootGuardPreset -or $RestoreBootGuard -or $Preflight
 if (-not $ranAnything) {
     Show-Usage
 }

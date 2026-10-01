@@ -173,6 +173,30 @@ export const getStartupItems = async () => {
     .filter(Boolean);
 };
 
+export const getBootGuardItems = async () => {
+  const raw = await invoke("get_boot_guard_items");
+  return raw
+    .split("\n")
+    .map((line) => {
+      const m = line.match(
+        /^BOOTGUARD\|([^|]+)\|([^|]+)\|([^|]+)\|(.+?)\|(true|false)\|(high|medium|low)\|(\d+)\|(true|false)\|([^|]+)$/
+      );
+      if (!m) return null;
+      return {
+        id: m[1],
+        kind: m[2],
+        name: m[3],
+        command: m[4].trim(),
+        enabled: m[5].toLowerCase() === "true",
+        impact: m[6],
+        ram: Number(m[7]),
+        safe: m[8].toLowerCase() === "true",
+        scope: m[9],
+      };
+    })
+    .filter(Boolean);
+};
+
 export const getContextMenuState = async () => {
   const raw = await invoke("get_context_menu");
   const line = raw.split("\n").find((l) => l.startsWith("CTXMENU|classic|"));

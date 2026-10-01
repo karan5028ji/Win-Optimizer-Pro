@@ -1353,6 +1353,432 @@ function Set-StartupItem {
 }
 
 # ---------------------------------------------------------------------------
+# Deep Boot Guard (Ghost Startup Inspector)
+# 4-level deep scan of everything that auto-launches at boot:
+#   L1: Registry Run keys (HKCU + HKLM 64-bit + HKLM 32-bit)
+#   L2: Startup folders (user + machine)
+#   L3: Scheduled tasks with Logon/Boot triggers (non-Microsoft namespace)
+#   L4: Third-party auto-start background services (VMs, daemons, updaters)
+# While Task Manager only shows L1+L2, this inspector also surfaces the
+# scheduled-task and service launchers that hide from the UI.
+# ---------------------------------------------------------------------------
+
+# Known heavy launchers -> RAM estimate (MB) + impact level.
+$Script:BootGuardDB = @{
+    'docker'         = @{ RAM = 2600; Level = 'high' }
+    'vmware'         = @{ RAM = 800;  Level = 'high' }
+    'vmmem'          = @{ RAM = 800;  Level = 'high' }
+    'vmmemwsl'       = @{ RAM = 800;  Level = 'high' }
+    'virtualbox'     = @{ RAM = 500;  Level = 'high' }
+    'wsl'            = @{ RAM = 500;  Level = 'high' }
+    'hyper-v'        = @{ RAM = 400;  Level = 'medium' }
+    'vmms'           = @{ RAM = 400;  Level = 'medium' }
+    'steam'          = @{ RAM = 350;  Level = 'medium' }
+    'epic'           = @{ RAM = 350;  Level = 'medium' }
+    'gog'            = @{ RAM = 300;  Level = 'medium' }
+    'battlenet'      = @{ RAM = 300;  Level = 'medium' }
+    'battle.net'     = @{ RAM = 300;  Level = 'medium' }
+    'adobe'          = @{ RAM = 300;  Level = 'medium' }
+    'creative cloud' = @{ RAM = 300;  Level = 'medium' }
+    'discord'        = @{ RAM = 250;  Level = 'medium' }
+    'slack'          = @{ RAM = 250;  Level = 'medium' }
+    'icue'           = @{ RAM = 250;  Level = 'medium' }
+    'teams'          = @{ RAM = 220;  Level = 'medium' }
+    'armoury'        = @{ RAM = 200;  Level = 'medium' }
+    'geforce'        = @{ RAM = 200;  Level = 'medium' }
+    'spotify'        = @{ RAM = 200;  Level = 'medium' }
+    'mysql'          = @{ RAM = 200;  Level = 'medium' }
+    'postgres'       = @{ RAM = 200;  Level = 'medium' }
+    'skype'          = @{ RAM = 180;  Level = 'medium' }
+    'zoom'           = @{ RAM = 180;  Level = 'medium' }
+    'qbit'           = @{ RAM = 160;  Level = 'medium' }
+    'qbittorrent'    = @{ RAM = 160;  Level = 'medium' }
+    'torrent'        = @{ RAM = 150;  Level = 'medium' }
+    'dropbox'        = @{ RAM = 150;  Level = 'medium' }
+    'wondershare'    = @{ RAM = 150;  Level = 'medium' }
+    'synapse'        = @{ RAM = 150;  Level = 'medium' }
+    'nvcontainer'    = @{ RAM = 150;  Level = 'medium' }
+    'vanguard'       = @{ RAM = 150;  Level = 'medium' }
+    'valorant'       = @{ RAM = 150;  Level = 'medium' }
+    'obs'            = @{ RAM = 150;  Level = 'medium' }
+    'mongod'         = @{ RAM = 150;  Level = 'medium' }
+    'dell'           = @{ RAM = 150;  Level = 'medium' }
+    'hp'             = @{ RAM = 120;  Level = 'medium' }
+    'lenovo'         = @{ RAM = 120;  Level = 'medium' }
+    'onedrive'       = @{ RAM = 120;  Level = 'medium' }
+    'google drive'   = @{ RAM = 120;  Level = 'medium' }
+    'whatsapp'       = @{ RAM = 150;  Level = 'medium' }
+    'telegram'       = @{ RAM = 120;  Level = 'medium' }
+    'rockstar'       = @{ RAM = 120;  Level = 'medium' }
+    'riot'           = @{ RAM = 120;  Level = 'medium' }
+    'epic online'    = @{ RAM = 120;  Level = 'medium' }
+    'logi'           = @{ RAM = 100;  Level = 'medium' }
+    'g hub'          = @{ RAM = 100;  Level = 'medium' }
+    'corsair'        = @{ RAM = 100;  Level = 'medium' }
+    'rgb'            = @{ RAM = 100;  Level = 'medium' }
+    'msi'            = @{ RAM = 100;  Level = 'medium' }
+    'asustek'        = @{ RAM = 100;  Level = 'medium' }
+    'java'           = @{ RAM = 100;  Level = 'medium' }
+    'oracle'         = @{ RAM = 100;  Level = 'medium' }
+    'redis'          = @{ RAM = 100;  Level = 'medium' }
+    'node'           = @{ RAM = 100;  Level = 'medium' }
+    'signal'         = @{ RAM = 100;  Level = 'low' }
+    'vlc'            = @{ RAM = 80;   Level = 'low' }
+    'teamviewer'     = @{ RAM = 80;   Level = 'low' }
+    'anydesk'        = @{ RAM = 80;   Level = 'low' }
+    'audacity'       = @{ RAM = 60;   Level = 'low' }
+}
+
+# Tokens that mark an entry SAFE to keep at boot: security, audio drivers,
+# wireless/BT, MIDI. Kernel drivers are also auto-whitelisted by their .sys path.
+$Script:BootGuardSafeTokens = @(
+    'securityhealth', 'windows security', 'windows defender', 'defender', 'msseces',
+    'realtek', 'rtk', 'maxxaudio', 'smartaudio', 'nahimic',
+    'synaptics', 'touchpad', 'loopmidi', 'midi',
+    'wlan', 'wifi', 'bluetooth', 'wireless'
+)
+
+function Get-BootGuardImpact {
+    <#
+        .SYNOPSIS
+        Classifies a boot entry against the known-app DB and safe tokens.
+        Returns Found/Safe/Impact/RamMB. Safe tokens win over the DB so a
+        "Realtek" driver never gets flagged heavy just because audio software
+        shares the name space.
+    #>
+    param(
+        [string]$Name,
+        [string]$Command,
+        [string]$DefaultLevel,
+        [int]$DefaultRam
+    )
+    $s = (($Name + ' ' + $Command)).ToLowerInvariant()
+    foreach ($token in $Script:BootGuardSafeTokens) {
+        if ($s.Contains($token)) {
+            return [pscustomobject]@{ Found = $true; Impact = 'low'; RamMB = 20; Safe = $true }
+        }
+    }
+    foreach ($k in $Script:BootGuardDB.Keys) {
+        if ($s.Contains($k)) {
+            $e = $Script:BootGuardDB[$k]
+            return [pscustomobject]@{ Found = $true; Impact = $e.Level; RamMB = $e.RAM; Safe = $false }
+        }
+    }
+    return [pscustomobject]@{ Found = $false; Impact = $DefaultLevel; RamMB = $DefaultRam; Safe = $false }
+}
+
+function Get-BootGuardObjectScan {
+    <#
+        .SYNOPSIS
+        Runs the full 4-level scan and returns structured objects so both the
+        list emitter and the 1-click preset can share one source of truth.
+    #>
+    $items = [System.Collections.Generic.List[object]]::new()
+
+    # L1: registry Run keys
+    $runKeys = @(
+        @{ Scope = 'HKCU';   Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' }
+        @{ Scope = 'HKLM';   Key = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' }
+        @{ Scope = 'HKLM32'; Key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run' }
+    )
+    foreach ($rk in $runKeys) {
+        if (-not (Test-Path -LiteralPath $rk.Key)) { continue }
+        $props = Get-ItemProperty -LiteralPath $rk.Key -ErrorAction SilentlyContinue
+        foreach ($p in $props.PSObject.Properties) {
+            if ($p.Name -in @('PSPath', 'PSParentPath', 'PSChildName', 'PSDrive', 'PSProvider')) { continue }
+            if (-not $p.Value) { continue }
+            $hit = Get-BootGuardImpact -Name $p.Name -Command $p.Value -DefaultLevel 'low' -DefaultRam 0
+            $items.Add([pscustomobject]@{
+                Id      = "reg|$($rk.Scope)|$($p.Name)"
+                Kind    = 'REGISTRY'
+                Name    = $p.Name
+                Command = $p.Value
+                Enabled = $true
+                Impact  = $hit.Impact
+                RamMB   = $hit.RamMB
+                Safe    = $hit.Safe
+                Scope   = $rk.Scope
+            })
+        }
+    }
+
+    # L2: startup folders
+    $folders = @(
+        @{ Scope = 'USERFOLDER';    Path = [Environment]::GetFolderPath('Startup') }
+        @{ Scope = 'MACHINEFOLDER'; Path = [Environment]::GetFolderPath('CommonStartup') }
+    )
+    foreach ($f in $folders) {
+        if (-not $f.Path -or -not (Test-Path -LiteralPath $f.Path)) { continue }
+        Get-ChildItem -LiteralPath $f.Path -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in '.lnk', '.url', '.bat', '.cmd', '.exe', '.vbs' } |
+            ForEach-Object {
+                $hit = Get-BootGuardImpact -Name $_.BaseName -Command $_.FullName -DefaultLevel 'low' -DefaultRam 0
+                $items.Add([pscustomobject]@{
+                    Id      = "file|$($f.Scope)|$($_.FullName)"
+                    Kind    = 'FOLDER'
+                    Name    = $_.Name
+                    Command = $_.FullName
+                    Enabled = $true
+                    Impact  = $hit.Impact
+                    RamMB   = $hit.RamMB
+                    Safe    = $hit.Safe
+                    Scope   = $f.Scope
+                })
+            }
+    }
+
+    # L3: scheduled tasks with Logon/Boot triggers (skip the Microsoft namespace)
+    try {
+        $tasks = Get-ScheduledTask -ErrorAction Stop
+        foreach ($t in $tasks) {
+            if ($t.TaskPath -like '\Microsoft\*') { continue }
+            $trig = @($t.Triggers | Where-Object {
+                $_.CimClass.CimClassName -in @('MSFT_TaskLogonTrigger', 'MSFT_TaskBootTrigger')
+            })
+            if ($trig.Count -eq 0) { continue }
+            $hit = Get-BootGuardImpact -Name $t.TaskName -Command "$($t.TaskPath)$($t.TaskName)" -DefaultLevel 'medium' -DefaultRam 100
+            $items.Add([pscustomobject]@{
+                Id      = "task|$($t.TaskPath)$($t.TaskName)"
+                Kind    = 'TASK'
+                Name    = $t.TaskName
+                Command = "$($t.TaskPath)$($t.TaskName)"
+                Enabled = ($t.State -ne 'Disabled')
+                Impact  = $hit.Impact
+                RamMB   = $hit.RamMB
+                Safe    = $hit.Safe
+                Scope   = 'TASK'
+            })
+        }
+    }
+    catch { Write-Log "[bootguard] task scan warning: $($_.Exception.Message)" }
+
+    # L4: auto-start services. Kernel drivers (.sys) are always whitelisted.
+    # Windows-internal helper processes are skipped unless they are a named
+    # audio/driver service; third-party services default to heavy (medium).
+    try {
+        $svcs = Get-CimInstance Win32_Service -Filter "StartMode='Auto'" -ErrorAction Stop
+        foreach ($s in $svcs) {
+            $path = $s.PathName
+            $trimmed = $path.Trim()
+            if ([string]::IsNullOrWhiteSpace($path) -or $trimmed.ToLowerInvariant().EndsWith('.sys')) {
+                $items.Add([pscustomobject]@{
+                    Id = "svc|$($s.Name)"; Kind = 'SERVICE'; Name = $s.Name
+                    Command = $s.DisplayName; Enabled = $true
+                    Impact = 'low'; RamMB = 0; Safe = $true; Scope = 'SERVICE'
+                })
+                continue
+            }
+            $underWin = $path.StartsWith($env:WINDIR, [System.StringComparison]::OrdinalIgnoreCase)
+            if ($underWin) {
+                $hit = Get-BootGuardImpact -Name $s.Name -Command $path -DefaultLevel 'low' -DefaultRam 0
+                if (-not $hit.Safe -and -not $hit.Found) { continue }
+            }
+            else {
+                $hit = Get-BootGuardImpact -Name $s.Name -Command $path -DefaultLevel 'medium' -DefaultRam 150
+            }
+            $items.Add([pscustomobject]@{
+                Id = "svc|$($s.Name)"; Kind = 'SERVICE'; Name = $s.Name
+                Command = $s.DisplayName; Enabled = $true
+                Impact = $hit.Impact; RamMB = $hit.RamMB; Safe = $hit.Safe; Scope = 'SERVICE'
+            })
+        }
+    }
+    catch { Write-Log "[bootguard] service scan warning: $($_.Exception.Message)" }
+
+    return $items
+}
+
+function Get-BootGuardItems {
+    <#
+        .SYNOPSIS
+        Emits BOOTGUARD|id|kind|name|command|enabled|impact|ram|safe|scope rows.
+    #>
+    foreach ($it in Get-BootGuardObjectScan) {
+        Write-Log "BOOTGUARD|$($it.Id)|$($it.Kind)|$($it.Name)|$($it.Command)|$($it.Enabled)|$($it.Impact)|$($it.RamMB)|$($it.Safe)|$($it.Scope)"
+    }
+    Write-Log "=== BOOT GUARD LIST COMPLETE ==="
+}
+
+function Set-BootGuardItem {
+    <#
+        .SYNOPSIS
+        Enables or disables one boot entry by id, e.g.
+        reg|HKCU|OneDrive, file|USERFOLDER|C:\...\x.lnk, task|\Vendor\Updater, svc|docker.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$Item,
+        [switch]$Enable,
+        [switch]$Disable,
+        [switch]$DryRun
+    )
+    $parts = $Item.Split('|', 2)
+    $kind = $parts[0]
+    $rest = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+    switch ($kind) {
+        'reg' {
+            $rp = $rest.Split('|', 2)
+            if ($rp.Count -ne 2) { Write-Log "[bootguard] invalid registry item: $Item"; return }
+            $scope = $rp[0]; $name = $rp[1]
+            switch ($scope) {
+                'HKLM'   { $key = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'; $dk = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunDisabled' }
+                'HKLM32' { $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'; $dk = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\RunDisabled' }
+                default  { $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; $dk = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunDisabled' }
+            }
+            $value = (Get-ItemProperty -LiteralPath $key -Name $name -ErrorAction SilentlyContinue).$name
+            if ($null -eq $value) {
+                $value = (Get-ItemProperty -LiteralPath $dk -Name $name -ErrorAction SilentlyContinue).$name
+                if ($null -eq $value) { Write-Log "[bootguard] registry item not found: $name"; return }
+                $from = $dk; $to = $key
+            }
+            else { $from = $key; $to = $dk }
+            if ($Disable -and $from -eq $dk) { Write-Log "[bootguard] already disabled: $name"; return }
+            if ($Enable -and $from -eq $key) { Write-Log "[bootguard] already enabled: $name"; return }
+            if ($DryRun) {
+                Write-Log "[bootguard] (dry-run) would $(if ($Enable) { 'enable' } else { 'disable' }): $name"
+                return
+            }
+            New-Item -Path $to -Force | Out-Null
+            Set-ItemProperty -Path $to -Name $name -Value $value -Type String -Force
+            Remove-ItemProperty -Path $from -Name $name -ErrorAction SilentlyContinue
+            Write-Log "[bootguard] $(if ($Enable) { 'enabled' } else { 'disabled' }): $name"
+        }
+        'file' {
+            $rp = $rest.Split('|', 2)
+            if ($rp.Count -ne 2) { Write-Log "[bootguard] invalid file item: $Item"; return }
+            $path = $rp[1]
+            if (-not (Test-Path -LiteralPath $path)) { Write-Log "[bootguard] file not found: $path"; return }
+            $dir = Split-Path -Parent $path
+            $base = Split-Path -Leaf $path
+            if ($Disable) {
+                if ($base -like '*.disabled') { Write-Log "[bootguard] already disabled: $base"; return }
+                if ($DryRun) { Write-Log "[bootguard] (dry-run) would disable: $base"; return }
+                Move-Item -LiteralPath $path -Destination (Join-Path $dir "$base.disabled") -Force
+                Write-Log "[bootguard] disabled: $base"
+            }
+            else {
+                if ($base -notlike '*.disabled') { Write-Log "[bootguard] already enabled: $base"; return }
+                $orig = $base -replace '\.disabled$', ''
+                if ($DryRun) { Write-Log "[bootguard] (dry-run) would enable: $orig"; return }
+                Move-Item -LiteralPath $path -Destination (Join-Path $dir $orig) -Force
+                Write-Log "[bootguard] enabled: $orig"
+            }
+        }
+        'task' {
+            $taskName = Split-Path -Leaf $rest
+            $taskPath = Split-Path -Parent $rest
+            if (-not $taskPath.StartsWith('\')) { $taskPath = "\$taskPath" }
+            if ($DryRun) {
+                Write-Log "[bootguard] (dry-run) would $(if ($Enable) { 'enable' } else { 'disable' }) task: $taskName"
+                return
+            }
+            if ($Enable) {
+                Enable-ScheduledTask -TaskName $taskName -TaskPath $taskPath | Out-Null
+                Write-Log "[bootguard] enabled task: $taskName"
+            }
+            else {
+                Disable-ScheduledTask -TaskName $taskName -TaskPath $taskPath | Out-Null
+                Write-Log "[bootguard] disabled task: $taskName"
+            }
+        }
+        'svc' {
+            $svcName = $rest
+            if ($DryRun) {
+                Write-Log "[bootguard] (dry-run) would $(if ($Enable) { 'set startup Automatic' } else { 'set startup Manual' }): $svcName"
+                return
+            }
+            if ($Enable) {
+                Set-Service -Name $svcName -StartupType AutomaticDelayedStart -ErrorAction SilentlyContinue
+                Write-Log "[bootguard] enabled service startup: $svcName"
+            }
+            else {
+                Set-Service -Name $svcName -StartupType Manual -ErrorAction SilentlyContinue
+                Write-Log "[bootguard] set service startup to Manual: $svcName"
+            }
+        }
+        default { Write-Log "[bootguard] unknown item kind: $kind" }
+    }
+}
+
+function Invoke-BootGuardPreset {
+    <#
+        .SYNOPSIS
+        "Instant 5-Second Boot": restore point + backup snapshot, then disables
+        every enabled non-safe high/medium item. Audio drivers, security and
+        kernel drivers are kept untouched, and the undo restores everything.
+    #>
+    param([switch]$DryRun)
+    $items = @(Get-BootGuardObjectScan | Where-Object { $_.Enabled -and -not $_.Safe -and $_.Impact -ne 'low' })
+    if ($items.Count -eq 0) {
+        Write-Log "[bootguard] preset: no heavy non-safe startup items to disable - already lean."
+        return
+    }
+    Write-Log "[bootguard] preset: $($items.Count) heavy items will be $(if ($DryRun) { 'previewed' } else { 'disabled' })."
+    Write-Log "[bootguard] preset: keeping whitelisted drivers, security and kernel services."
+    New-RestorePoint -DryRun:$DryRun
+
+    if (-not $DryRun) {
+        $dir = Join-Path $env:USERPROFILE 'Documents\Win-Optimizer-Pro'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        $backupItems = @()
+        foreach ($it in $items) {
+            $orig = $null
+            if ($it.Kind -eq 'SERVICE') {
+                $s = Get-CimInstance Win32_Service -Filter "Name='$($it.Name)'" -ErrorAction SilentlyContinue
+                if ($s) { $orig = $s.StartMode }
+            }
+            $backupItems += [ordered]@{ Id = $it.Id; Kind = $it.Kind; Name = $it.Name; Original = $orig }
+        }
+        $backup = [ordered]@{
+            Created = (Get-Date).ToString('o')
+            Items   = $backupItems
+        }
+        $file = Join-Path $dir "bootguard-backup-$stamp.json"
+        $backup | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $file -Encoding UTF8
+        Write-Log "[bootguard] backup saved: $file"
+    }
+
+    foreach ($it in $items) {
+        Write-Log "[bootguard] disabling: $($it.Name) ($($it.Impact))"
+        Set-BootGuardItem -Item $it.Id -Disable -DryRun:$DryRun
+    }
+    Write-Log "[bootguard] preset complete."
+}
+
+function Restore-BootGuardBackup {
+    <#
+        .SYNOPSIS
+        Re-enables every entry from the most recent Boot Guard preset backup.
+    #>
+    param([switch]$DryRun)
+    $dir = Join-Path $env:USERPROFILE 'Documents\Win-Optimizer-Pro'
+    $file = Get-ChildItem -LiteralPath $dir -Filter 'bootguard-backup-*.json' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $file) { Write-Log "[bootguard] no backup found - nothing to restore."; return }
+    Write-Log "[bootguard] restoring from backup: $($file.Name)"
+    $data = Get-Content -Raw -LiteralPath $file.FullName | ConvertFrom-Json
+    foreach ($it in $data.Items) {
+        if ($it.Kind -eq 'SERVICE' -and $it.Original) {
+            $type = $it.Original
+            if ($type -eq 'Auto') { $type = 'Automatic' }
+            if ($DryRun) {
+                Write-Log "[bootguard] (dry-run) would restore service: $($it.Name) ($type)"
+                continue
+            }
+            try {
+                Set-Service -Name $it.Name -StartupType $type -ErrorAction Stop
+                Write-Log "[bootguard] restored service: $($it.Name) ($type)"
+            }
+            catch { Write-Log "[bootguard] warning: could not restore service $($it.Name): $($_.Exception.Message)" }
+        }
+        else {
+            Set-BootGuardItem -Item $it.Id -Enable -DryRun:$DryRun
+        }
+    }
+    Write-Log "[bootguard] restore complete."
+}
+
+# ---------------------------------------------------------------------------
 # Transparency metadata - registry keys touched by each tweak (UI tooltips)
 # ---------------------------------------------------------------------------
 function Get-TweakRegistryInfo {

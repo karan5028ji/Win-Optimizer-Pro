@@ -14,7 +14,7 @@
 [![Website](https://img.shields.io/badge/website-winoptimizerpro-14b8a6)](https://karan5028ji.github.io/Win-Optimizer-Pro/)
 
 > **⚠️ Warning:** This tool modifies your system — it removes apps, edits the registry and deletes files.
-> **Dry-run mode is ON by default.** Review the console output before applying anything.
+> Review the console output before applying anything — the app applies changes directly by default and auto-elevates on start.
 
 </div>
 
@@ -64,6 +64,16 @@ winget install karan5028ji.WinOptimizerPro
 > checks for updates on startup and installs them in the background
 > ([auto-updater](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)).
 
+## 🆕 What's new in v2.1.5
+
+| Area | Change |
+| --- | --- |
+| 🐛 **Ghost Startup Inspector — Deep Boot Guard** | New tab that scans **4 boot layers** Task Manager hides: registry Run keys (HKCU + HKLM 64/32-bit), hidden Startup-folder shortcuts, **scheduled tasks with logon/boot triggers** and **auto-start background services** (VMs, daemons, updaters) |
+| 🎯 **Impact ranking** | Every entry gets a RAM estimate + High / Medium / Low impact badge from a known-launcher database (Docker ~2.6 GB, Steam/Epic ~350 MB, …). Audio drivers, Windows Security and kernel services are auto-whitelisted as Safe |
+| ⚡ **1-Click "Instant 5-Second Boot"** | Creates a System Restore point + JSON backup, then disables every non-essential heavy launcher in one go — keeps drivers & security untouched. **Restore from backup** re-enables everything |
+| 🎛️ **Per-entry toggle** | Enable/disable any ghost item (registry, task, service, folder shortcut) without uninstalling |
+| 🏆 **Published to winget** | Now installable via `winget install karan5028ji.WinOptimizerPro` — PR merged into `microsoft/winget-pkgs` |
+
 ## 🆕 What's new in v2.1.4
 
 | Area | Change |
@@ -104,6 +114,7 @@ winget install karan5028ji.WinOptimizerPro
 | ⚡ **1-Click Profiles** | **Gamer**, **Privacy/Stealth** and **Developer** profiles — one click applies the full stack incl. apps |
 | 📂 **Config Import/Export** | Save your choices (apps, tweaks, DNS, power, updates, features, SSH) as a shareable **JSON** profile in `Documents\Win-Optimizer-Pro` |
 | 🎛️ **Startup Manager** | See & control everything that launches at boot — registry Run keys and Startup folders, with Enable/Disable |
+| 👻 **Deep Boot Guard** | Ghost Startup Inspector — 4-level scan (registry, folders, **logon scheduled tasks**, **auto-start services**) with RAM impact badges, a Safe-driver whitelist, per-entry toggles and a 1-click "Instant 5-Second Boot" preset with restore-point + backup undo |
 | 🖱️ **Win11 Context Menu** | Toggle the classic Win10-style right-click menu |
 | 🎨 **Registry Transparency** | Hover-tooltips on every tweak show the exact registry key being changed |
 | 🌗 **Light & Dark Mode** | Flat teal/slate design system with a one-click theme toggle |
@@ -135,6 +146,10 @@ winget install karan5028ji.WinOptimizerPro
 .\optimizer.ps1 -ExportConfig -ConfigName my-setup    # save a JSON profile
 .\optimizer.ps1 -ImportConfig -ConfigName my-setup    # apply a JSON profile
 .\optimizer.ps1 -ListStartup               # startup manager
+.\optimizer.ps1 -ListBootGuard              # deep 4-level boot scan (ghost inspector)
+.\optimizer.ps1 -SetBootGuard "<id>" -Disable   # disable one ghost entry
+.\optimizer.ps1 -BootGuardPreset            # 1-click "instant 5-second boot" preset
+.\optimizer.ps1 -RestoreBootGuard           # undo the preset from its backup
 .\optimizer.ps1 -SetContextMenu Classic    # Win10-style context menu
 .\optimizer.ps1 -Preflight dism            # run the anti-brick gate
 .\optimizer.ps1 -QuickScan                 # read-only health snapshot

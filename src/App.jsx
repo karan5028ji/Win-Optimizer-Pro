@@ -15,6 +15,7 @@ import Dashboard from "./components/Dashboard";
 import DeepClean from "./components/DeepClean";
 import Debloater from "./components/Debloater";
 import Tweaks from "./components/Tweaks";
+import BootGuard from "./components/BootGuard";
 import Install from "./components/Install";
 import Tuning from "./components/Tuning";
 import Profiles from "./components/Profiles";
@@ -37,6 +38,7 @@ const TABS = {
   clean: { label: "Deep Clean", component: DeepClean },
   debloat: { label: "Debloater", component: Debloater },
   tweaks: { label: "System Tweaks", component: Tweaks },
+  bootguard: { label: "Boot Guard", component: BootGuard },
   tuning: { label: "Tuning", component: Tuning },
   profiles: { label: "Profiles", component: Profiles },
 };
