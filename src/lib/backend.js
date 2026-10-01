@@ -173,7 +173,11 @@ export const getStartupItems = async () => {
     .filter(Boolean);
 };
 
+// Matched case-sensitively against raw fields - see the note in parseBootGuardRow.
 const BOOT_GUARD_KINDS = ["REGISTRY", "FOLDER", "TASK", "SERVICE"];
+
+// parseBootGuardRow is exported so the regression tests in backend.test.js can
+// exercise it directly; app code should use getBootGuardItems() instead.
 
 // Rows look like:
 //   BOOTGUARD|reg|HKCU|loopMIDI|REGISTRY|loopMIDI|"C:\...\loopMIDI.exe"|True|low|20|True|HKCU
@@ -182,7 +186,7 @@ const BOOT_GUARD_KINDS = ["REGISTRY", "FOLDER", "TASK", "SERVICE"];
 // regex. Walk from both ends instead: the trailing five fields are always
 // enabled|impact|ram|safe|scope and the middle is id|kind|name|command, where
 // kind is one of a known small set.
-const parseBootGuardRow = (line) => {
+export const parseBootGuardRow = (line) => {
   const at = line.indexOf("BOOTGUARD|");
   if (at === -1) return null;
 
@@ -201,18 +205,23 @@ const parseBootGuardRow = (line) => {
   if (!/^(high|medium|low)$/.test(asImpact)) return null;
   if (!/^\d+$/.test(String(ram).trim())) return null;
 
-  // Everything left is <id>|<kind>|<name>|<command>, and the trailing three are
-  // always single tokens, so read from the end: that keeps pipes inside both the
-  // Id ("reg|HKCU|<value>") and the Command intact. Matching a "KIND" token from
-  // the front is unsafe - the task Id prefix is literally "task", which collides
-  // with the TASK kind.
-  if (parts.length < 4) return null;
-  const command = parts.pop().trim();
-  const name = parts.pop().trim();
-  const kind = parts.pop().trim().toUpperCase();
-  if (!BOOT_GUARD_KINDS.includes(kind)) return null;
-  const id = parts.join("|").trim();
-  if (!id) return null;
+  // What is left is <id>|<kind>|<name>|<command>. Both the Id ("reg|HKCU|<value>")
+  // and the Command can contain "|", so neither can be read as a single field.
+  // Locate the Kind token instead and take everything around it: the Id is all
+  // fields before it, the Name is the one right after it, and the Command is
+  // everything from two after it onwards (rejoined, so its pipes survive).
+  //
+  // The match must stay case-SENSITIVE. Task Ids begin with the literal prefix
+  // "task", which would otherwise collide with the TASK kind and swallow the
+  // task path into the Id. The engine always writes the kind upper-cased.
+  const kindIndex = parts.findIndex((p) => BOOT_GUARD_KINDS.includes(p));
+  if (kindIndex < 1) return null;
+
+  const kind = parts[kindIndex];
+  const id = parts.slice(0, kindIndex).join("|").trim();
+  const name = (parts[kindIndex + 1] ?? "").trim();
+  const command = parts.slice(kindIndex + 2).join("|").trim();
+  if (!id || !name) return null;
 
   return {
     id,
