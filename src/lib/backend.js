@@ -173,28 +173,63 @@ export const getStartupItems = async () => {
     .filter(Boolean);
 };
 
+const BOOT_GUARD_KINDS = ["REGISTRY", "FOLDER", "TASK", "SERVICE"];
+
+// Rows look like:
+//   BOOTGUARD|reg|HKCU|loopMIDI|REGISTRY|loopMIDI|"C:\...\loopMIDI.exe"|True|low|20|True|HKCU
+// Both the Id (reg|HKCU|<value>) and the Command may contain "|", and Write-Log
+// prefixes every line with "[timestamp] ", so this cannot be parsed with a fixed
+// regex. Walk from both ends instead: the trailing five fields are always
+// enabled|impact|ram|safe|scope and the middle is id|kind|name|command, where
+// kind is one of a known small set.
+const parseBootGuardRow = (line) => {
+  const at = line.indexOf("BOOTGUARD|");
+  if (at === -1) return null;
+
+  const parts = line.slice(at + "BOOTGUARD|".length).replace(/\r$/, "").split("|");
+  if (parts.length < 10) return null;
+
+  const scope = parts.pop();
+  const safe = parts.pop();
+  const ram = parts.pop();
+  const impact = parts.pop();
+  const enabled = parts.pop();
+
+  const asBool = (v) => String(v).trim().toLowerCase() === "true";
+  const asImpact = String(impact).trim().toLowerCase();
+  if (!asBool(enabled) && !/^false$/i.test(String(enabled).trim())) return null;
+  if (!/^(high|medium|low)$/.test(asImpact)) return null;
+  if (!/^\d+$/.test(String(ram).trim())) return null;
+
+  // Everything left is <id>|<kind>|<name>|<command>, and the trailing three are
+  // always single tokens, so read from the end: that keeps pipes inside both the
+  // Id ("reg|HKCU|<value>") and the Command intact. Matching a "KIND" token from
+  // the front is unsafe - the task Id prefix is literally "task", which collides
+  // with the TASK kind.
+  if (parts.length < 4) return null;
+  const command = parts.pop().trim();
+  const name = parts.pop().trim();
+  const kind = parts.pop().trim().toUpperCase();
+  if (!BOOT_GUARD_KINDS.includes(kind)) return null;
+  const id = parts.join("|").trim();
+  if (!id) return null;
+
+  return {
+    id,
+    kind,
+    name,
+    command,
+    enabled: asBool(enabled),
+    impact: asImpact,
+    ram: Number(ram),
+    safe: asBool(safe),
+    scope: scope.trim(),
+  };
+};
+
 export const getBootGuardItems = async () => {
   const raw = await invoke("get_boot_guard_items");
-  return raw
-    .split("\n")
-    .map((line) => {
-      const m = line.match(
-        /^BOOTGUARD\|([^|]+)\|([^|]+)\|([^|]+)\|(.+?)\|(true|false)\|(high|medium|low)\|(\d+)\|(true|false)\|([^|]+)$/
-      );
-      if (!m) return null;
-      return {
-        id: m[1],
-        kind: m[2],
-        name: m[3],
-        command: m[4].trim(),
-        enabled: m[5].toLowerCase() === "true",
-        impact: m[6],
-        ram: Number(m[7]),
-        safe: m[8].toLowerCase() === "true",
-        scope: m[9],
-      };
-    })
-    .filter(Boolean);
+  return raw.split("\n").map(parseBootGuardRow).filter(Boolean);
 };
 
 export const getContextMenuState = async () => {
