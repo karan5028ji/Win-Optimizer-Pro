@@ -4328,7 +4328,7 @@ dependencies = [
 
 [[package]]
 name = "win-optimizer-pro"
-version = "2.1.6"
+version = "2.1.7"
 dependencies = [
  "serde",
  "serde_json",

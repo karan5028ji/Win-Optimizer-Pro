@@ -6,7 +6,7 @@
 
 **A modern, enterprise-grade Windows optimizer, cleaner & debloater — powered by Rust, React and PowerShell.**
 
-[![Version](https://img.shields.io/badge/version-2.1.6-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
+[![Version](https://img.shields.io/badge/version-2.1.7-teal)](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)
 [![CI](https://github.com/karan5028ji/Win-Optimizer-Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/karan5028ji/Win-Optimizer-Pro/actions)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)](https://www.microsoft.com/windows)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-0d9488)](https://v2.tauri.app)
@@ -52,7 +52,7 @@ The fastest way — one line, straight from GitHub, no install needed:
 irm https://raw.githubusercontent.com/karan5028ji/Win-Optimizer-Pro/main/run.ps1 | iex
 ```
 
-Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.6_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
+Prefer a proper install (per-machine, Start Menu + Desktop shortcuts)? Grab the **`Win-Optimizer-Pro_2.1.7_x64-setup.exe`** from the [Releases](https://github.com/karan5028ji/Win-Optimizer-Pro/releases) page.
 
 Or install with **winget**:
 
@@ -63,6 +63,14 @@ winget install karan5028ji.WinOptimizerPro
 > Releases are built automatically by CI on tags — just push a `v*` tag. The app
 > checks for updates on startup and installs them in the background
 > ([auto-updater](https://github.com/karan5028ji/Win-Optimizer-Pro/releases)).
+
+## 🆕 What's new in v2.1.7
+
+| Area | Change |
+| --- | --- |
+| 🐛 **Boot Guard list actually populates** | v2.1.6 shipped the Boot Guard tab with a parser that silently dropped **every** row, so the tab rendered empty even though the engine found entries. The row parser now reads the log format correctly — the registry/scheduled-task IDs and commands contain `|` characters, so it walks both ends of each line instead of using a fixed pattern. Also fixed: `Write-Log` timestamps prefixed every line, and PowerShell emits `True`/`False` (not `true`/`false`). |
+| 🧪 **Regression tests for the parser** | `npm test` runs 10 `node --test` cases covering pipe-in-ID, pipe-in-command, CRLF rows, junk lines and malformed values, so this class of bug cannot silently return. |
+| 🏷️ **Sidebar version syncs itself** | The footer version was a hardcoded string that drifted on every bump. It is now injected from `tauri.conf.json` at build time, so bumping the version in one place updates the UI, the installer name and the updater manifest together. |
 
 ## 🆕 What's new in v2.1.6
 
@@ -188,7 +196,7 @@ npm run tauri build
 
 Output:
 
-- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.6_x64-setup.exe`
+- Installer: `src-tauri\target\release\bundle\nsis\Win-Optimizer-Pro_2.1.7_x64-setup.exe`
 - Binary: `src-tauri\target\release\win-optimizer-pro.exe`
 
 **Requirements:** Node.js 18+, Rust stable (MSVC toolchain), WebView2 (bundled with Windows 11 / modern Windows 10).
