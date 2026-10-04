@@ -18,11 +18,12 @@ jobs:
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
     steps:
+      # Pinned to commit SHAs, not mutable tags - see the note in ci.yml.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download unsigned installer from release
-        uses: robinraju/release-downloader@v1
+        uses: robinraju/release-downloader@28fc21f50d76778e7023361aa1f863e717d3d56f # v1
         with:
           tag: ${{ github.event.inputs.tag }}
           fileName: "Win-Optimizer-Pro_*_x64-setup.exe"
@@ -30,7 +31,7 @@ jobs:
 
       - name: Upload unsigned artifact
         id: upload-unsigned-artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: unsigned-installer
           path: unsigned/*.exe
@@ -38,7 +39,7 @@ jobs:
 
       - name: Submit signing request to SignPath
         id: sign
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
@@ -61,7 +62,7 @@ jobs:
             --output "${SIGNED}.sig"
 
       - name: Upload signed installer back to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.event.inputs.tag }}
           files: |

@@ -10,17 +10,24 @@ jobs:
     name: Build & Test
     runs-on: windows-latest
     steps:
+      # All third-party actions are pinned to a full commit SHA rather than a
+      # mutable tag, so a tag cannot be repointed at new code underneath us.
+      # The version is kept in a trailing comment - to upgrade, resolve the new
+      # tag with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>` and pin the
+      # COMMIT sha (annotated tags resolve to a tag object that will not work).
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
 
+      # Pinning this action freezes the action code, not the Rust version: with
+      # no `toolchain` input it still resolves the current stable channel.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Install frontend deps
         run: npm ci
