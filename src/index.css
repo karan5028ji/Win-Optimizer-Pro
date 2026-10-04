@@ -1,8 +1,92 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind v4 points the `dark:` variant at prefers-color-scheme. This app
+   toggles a `.dark` class on <html> instead, so without this the theme toggle
+   would stop working and the UI would follow the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  /* Two rules that were in Tailwind v3's preflight and v4 removed. Restored
+     verbatim so the upgrade changes nothing on screen.
+
+     1. button cursor. v3 gave every button a pointer cursor; v4 follows the
+        browser default (`default`). A fix scoped to .btn would not be enough:
+        29 of the app's 47 buttons do not use the btn family - every Toggle, the
+        per-row action buttons, the sidebar item, the modal close button.
+        Confirmed by rendering both builds and reading getComputedStyle for every
+        element: without this rule all of those report `cursor: default`.
+     2. :disabled went back to `cursor: default` so a disabled button does not
+        keep the hand cursor. `disabled:cursor-not-allowed` on .btn is a
+        utility-layer rule and still wins over this.
+
+     Not restored: v3 reset borders to gray-200 (#e5e7eb) where v4 uses
+     `currentColor`. Left alone after checking - the default is never visible,
+     because every painted border in the app sets an explicit colour. .card,
+     .input and .btn-secondary all do, all five .badge-* variants do in light
+     mode (border-teal-600/30, border-emerald-600/30, border-amber-600/30,
+     border-red-600/30, border-slate-200), and both divide-y call sites pass
+     divide-slate-200. */
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: default;
+  }
+}
+
+/* Replaces tailwind.config.js. The old `accent` palette (11 shades) was removed
+   because nothing in the app referenced accent-* - it was dead config. */
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Tailwind v4 ships its palette in oklch and it is NOT the same as v3's hex
+     palette. Measured against the v3 build, the worst offenders are red-600
+     (#dc2626 -> #e7000b, 38/255 on one channel) and red-700 (28/255) - both on
+     .btn-danger - followed by teal-600/700 (13-15/255) and amber (8-9/255).
+     The slate greys are within 0-4/255, i.e. imperceptible.
+
+     These are the exact values v3 emitted, so pinning them keeps this upgrade
+     visually a no-op. A dependency bump that also restyles the app would be a
+     security patch doing something it should not. Shades are listed only where
+     the app actually uses them; adding a new shade means adding it here too,
+     or it will pick up the v4 oklch value. */
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-teal-400: #2dd4bf;
+  --color-teal-600: #0d9488;
+  --color-teal-700: #0f766e;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+  --color-sky-400: #38bdf8;
+  --color-sky-600: #0284c7;
+  --color-sky-700: #0369a1;
+}
 
 :root {
   color-scheme: light;
@@ -55,18 +139,31 @@ body {
   animation: bar-slide 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+/* `.btn` has to be a `@utility` rather than a class inside `@layer components`:
+   the `.btn-*` variants below use `@apply btn`, and v4's `@apply` can only pull
+   in custom utilities, not arbitrary component classes. Declaring it any other
+   way makes all four button variants fail to compile. */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+/* Same reason as .btn: the five .badge-* variants below @apply this base class. */
+@utility badge {
+  @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide;
+}
+
 @layer components {
   /* ---------- Cards ---------- */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    /* shadow-xs, not shadow-sm: v4 inserted shadow-2xs/xs below shadow-sm, so
+       v4's shadow-sm is v3's (unnamed) default and v4's shadow-xs is v3's
+       shadow-sm. Keeping the name would have silently thinned this shadow. */
+    @apply rounded-xl border border-slate-200 bg-white shadow-xs;
     @apply dark:border-slate-700 dark:bg-slate-800 dark:shadow-none;
     transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* ---------- Buttons ---------- */
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40;
-  }
   .btn-primary {
     @apply btn bg-teal-600 text-white hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-md active:translate-y-0 active:shadow-none;
   }
@@ -102,9 +199,6 @@ body {
   }
 
   /* ---------- Badges ---------- */
-  .badge {
-    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide;
-  }
   .badge-teal {
     @apply badge border-teal-600/30 bg-teal-600/10 text-teal-700 dark:border-teal-600/40 dark:bg-teal-600/15 dark:text-teal-400;
   }

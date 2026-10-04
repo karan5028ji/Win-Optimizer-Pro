@@ -31,7 +31,7 @@ export default function Toggle({
         }`}
       >
         <span
-          className={`absolute left-0.5 top-1/2 -translate-y-1/2 ${knob} rounded-full bg-white shadow-sm transition-transform duration-200 ease-smooth ${
+          className={`absolute left-0.5 top-1/2 -translate-y-1/2 ${knob} rounded-full bg-white shadow-xs transition-transform duration-200 ease-smooth ${
             checked ? shift : "translate-x-0"
           }`}
         />
