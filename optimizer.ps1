@@ -251,6 +251,7 @@ else {
     exit 0
 }
 
+try {
 # --- Dispatch actions -------------------------------------------------------
 if ($ListCategories) {
     Write-Log "Available bloatware categories:"
@@ -474,3 +475,5 @@ else {
         Write-Log "=== OPTIMIZER COMPLETE ==="
     }
 }
+
+} catch {
