@@ -10,6 +10,8 @@
 [![CI](https://github.com/karan5028ji/Win-Optimizer-Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/karan5028ji/Win-Optimizer-Pro/actions)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)](https://www.microsoft.com/windows)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-0d9488)](https://v2.tauri.app)
+[![Azure for Students](https://img.shields.io/badge/Azure-$100_Free_Student_Cloud-0078D4?logo=microsoftazure&logoColor=white)](https://azure.microsoft.com/free/students?wt.mc_id=studentamb_664130)
+[![Microsoft Copilot Studio](https://img.shields.io/badge/Copilot_Studio-Free_AI_Agent_Lab-5C2D91?logo=microsoft&logoColor=white)](https://learn.microsoft.com/credentials/applied-skills/build-an-agent-in-microsoft-copilot-studio/?wt.mc_id=studentamb_664130)
 [![License: MIT](https://img.shields.io/github/license/karan5028ji/Win-Optimizer-Pro)](LICENSE)
 [![Website](https://img.shields.io/badge/website-winoptimizerpro-14b8a6)](https://karan5028ji.github.io/Win-Optimizer-Pro/)
 
@@ -239,3 +241,5 @@ This project is maintained and developed by **Kxrn** — an independent software
 - **Developer Portfolio:** [kxrn.is-a.dev](https://kxrn.is-a.dev/)
 - **GitHub Profile:** [@karan5028ji](https://github.com/karan5028ji)
 - **Music Label:** Founder of [DuskyMoon Productions](https://duskymoon.vercel.app)
+- **Free Student Cloud:** [Claim $100 Free Azure for Students (No Credit Card)](https://azure.microsoft.com/free/students?wt.mc_id=studentamb_664130)
+- **Free AI Agent Sandbox:** [Build an AI Agent in Microsoft Copilot Studio](https://learn.microsoft.com/credentials/applied-skills/build-an-agent-in-microsoft-copilot-studio/?wt.mc_id=studentamb_664130)
